@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  backend:
+    container_name: backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    volumes:
+      - ./backend/app:/app
+    ports:
+      - "80:80"
+    networks:
+      - smn-network
+
+    depends_on:
+      - cassandra
+
+  cassandra:
+    image: cassandra:4.1.2
+    volumes:
+      - ./storage/cassandra:/var/lib/cassandra
+    ports:
+      - "9042:9042"
+    networks:
+      - smn-network
+
+  jupyter-notebook:
+    image: jupyter/datascience-notebook
+    ports:
+      - "8888:8888"
+    networks:
+      - smn-network
+
+networks:
+  smn-network:
+    driver: bridge
