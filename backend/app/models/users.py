@@ -11,3 +11,4 @@ class User(Model):
     email = columns.Text(primary_key=True)
     password = columns.Text()
     created_at = columns.DateTime()
+    is_verified = columns.Boolean(default=False)

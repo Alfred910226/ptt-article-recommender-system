@@ -12,9 +12,10 @@ services:
       - "80:80"
     networks:
       - smn-network
-
     depends_on:
       - cassandra
+    env_file:
+      - ./backend/.env.backend
 
   cassandra:
     image: cassandra:4.1.2
