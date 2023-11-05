@@ -19,12 +19,12 @@ class Hasher():
     
 class Token():
     @staticmethod
-    def get_access_token(data: dict, expires_delta: Union[timedelta, None] = None):
+    def get_token(data: dict, expires_delta: Union[timedelta, None] = None):
         to_encode = data.copy()
         if expires_delta:
             expire = datetime.now() + expires_delta
         else:
-            expire = datetime.now() + timedelta(minutes=30)
+            expire = datetime.now() + timedelta(hours=1)
         to_encode.update({'exp': expire})
 
         encodeed_jwt = jwt.encode(to_encode, os.getenv('TOKEN_SECRET_KEY'), algorithm=os.getenv('ALGORITHM'))

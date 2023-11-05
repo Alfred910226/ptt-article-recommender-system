@@ -23,9 +23,14 @@ class ResponseBase(BaseModel):
 class UserCreatedResponse(ResponseBase):
     details: UserInfoResponse
 
-class TokenInfoResponse(BaseModel):
+class AccessTokenInfoResponse(BaseModel):
     accessToken: str
     tokenType: str
 
-class TokenPayload(BaseModel):
+class AccessTokenPayload(BaseModel):
     uid: Union[str, None] = None
+
+class EmailVerificationTokenPayload(BaseModel):
+    uid: Union[str, None]
+    usage: Union[str, None] = None
+    exp: Union[int, None] 

@@ -25,6 +25,8 @@ services:
       - "9042:9042"
     networks:
       - smn-network
+    environment:
+      - CQLENG_ALLOW_SCHEMA_MANAGEMENT=1
 
   jupyter-notebook:
     image: jupyter/datascience-notebook
