@@ -13,7 +13,7 @@ class User(Model):
     created_at = columns.DateTime()
     is_verified = columns.Boolean(default=False)
 
-class AuthenticatedEmailVerificationToken(Model):
+class AuthenticatedVerificationEmailToken(Model):
     __keyspace__ = 'ptt'
     __table_name__ = 'authenticated_token'
     __options__ = {'default_time_to_live': 60}

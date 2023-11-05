@@ -10,7 +10,7 @@ from jose import JWTError, ExpiredSignatureError
 
 from app.utils.encryptor import Hasher, Token
 from app.schemas.users import UserCreate, UserCreatedResponse, UserInfo, AccessTokenInfoResponse, AccessTokenPayload, EmailVerificationTokenPayload, ResendVerificationEmail
-from app.models.users import User, AuthenticatedEmailVerificationToken
+from app.models.users import User, AuthenticatedVerificationEmailToken
 
 router = APIRouter(
     prefix="/user",
@@ -23,7 +23,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 async def create_table():
     connection.setup(['cassandra'], "ptt", port=9042, protocol_version=3)
     sync_table(User)
-    sync_table(AuthenticatedEmailVerificationToken)
+    sync_table(AuthenticatedVerificationEmailToken)
 
 async def get_current_user(token: str = Depends(oauth2_scheme)):
     credentials_exception = HTTPException(
@@ -162,7 +162,7 @@ async def email_verification(token: str):
     """
     query user info from database
     """
-    token_info = AuthenticatedEmailVerificationToken.objects.filter(token=token).allow_filtering().first()
+    token_info = AuthenticatedVerificationEmailToken.objects.filter(token=token).allow_filtering().first()
 
     if token_info is not None:
         return HTTPException(
@@ -176,7 +176,7 @@ async def email_verification(token: str):
         User.objects.filter(uid=user_info.uid, email=user_info.email).allow_filtering().update(is_verified=True)
         authenticated_token_ttl: int = (exp - datetime.now().timestamp()).__int__()
         if authenticated_token_ttl > 0:
-            AuthenticatedEmailVerificationToken.objects.ttl(authenticated_token_ttl).create(token=token, uid=user_info.uid, created_at=datetime.now())
+            AuthenticatedVerificationEmailToken.objects.ttl(authenticated_token_ttl).create(token=token, uid=user_info.uid, created_at=datetime.now())
         return HTTPException(
             status_code=status.HTTP_202_ACCEPTED,
             detail="Email verification successful!"
