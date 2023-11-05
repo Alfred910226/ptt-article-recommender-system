@@ -130,7 +130,7 @@ async def login(from_data: OAuth2PasswordRequestForm = Depends()):
     }
 
 @router.post("/email-verify/")
-async def email_verify(token: str):
+async def email_verification(token: str):
     """
     decode email verification token
     """
