@@ -9,7 +9,7 @@ from cassandra.cqlengine import connection
 from jose import JWTError, ExpiredSignatureError
 
 from app.utils.encryptor import Hasher, Token
-from app.schemas.users import UserCreate, UserCreatedResponse, UserInfo, AccessTokenInfoResponse, AccessTokenPayload, EmailVerificationTokenPayload
+from app.schemas.users import UserCreate, UserCreatedResponse, UserInfo, AccessTokenInfoResponse, AccessTokenPayload, EmailVerificationTokenPayload, ResendVerificationEmail
 from app.models.users import User, AuthenticatedEmailVerificationToken
 
 router = APIRouter(
@@ -186,6 +186,28 @@ async def email_verification(token: str):
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="User with email {email} does not exist!".format(email=user_info.email)
         )
+    
+@router.post("/resend-verification-email")
+async def resend_email_verification(resend_email: ResendVerificationEmail):
+    user_info = User.objects.filter(email=resend_email.email).allow_filtering().first()
+    if user_info is None:
+        return HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Your email address has not been registered as an account!"
+        )
+    elif user_info.is_verified == True:
+        return HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Your email address has already been verified!"
+        )
+    else:
+        email_verification_token = Token.get_token(
+            data={"uid": user_info.uid.__str__(), "usage": "email-verification"}, 
+            expires_delta=timedelta(hours=1)
+        )
+
+        return {"detail": "Verification email has been sent to your registered email address!"}
+
 
 @router.post("/logout", response_model=AccessTokenInfoResponse)
 async def logout(token: str = Depends(oauth2_scheme)):

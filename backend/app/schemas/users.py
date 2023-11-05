@@ -34,3 +34,6 @@ class EmailVerificationTokenPayload(BaseModel):
     uid: Union[str, None]
     usage: Union[str, None] = None
     exp: Union[int, None] 
+
+class ResendVerificationEmail(BaseModel):
+    email: EmailStr
