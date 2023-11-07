@@ -2,15 +2,15 @@ from typing import Any, Annotated
 from datetime import datetime, timedelta
 import os
 
-from fastapi import APIRouter, status, HTTPException, Depends
+from fastapi import APIRouter, status, HTTPException, Depends, Response, Header
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from cassandra.cqlengine.management import sync_table
 from cassandra.cqlengine import connection
 from jose import JWTError, ExpiredSignatureError
 
 from app.utils.encryptor import Hasher, Token
-from app.schemas.users import UserCreate, UserCreatedResponse, UserInfo, AccessTokenInfoResponse, AccessTokenPayload, EmailVerificationTokenPayload, ResendVerificationEmail
-from app.models.users import User, AuthenticatedVerificationEmailToken
+from app.schemas.users import UserCreate, UserCreatedResponse, UserInfo, AccessTokenInfoResponse, AccessToken, EmailVerificationToken, ResetToNewPassword, Email, PasswordResetToken
+from app.models.users import User, TokenRevoked
 
 router = APIRouter(
     prefix="/user",
@@ -21,9 +21,9 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
 @router.on_event("startup")
 async def create_table():
-    connection.setup(['cassandra'], "ptt", port=9042, protocol_version=3)
+    connection.setup(['cassandra'], "article_compass", port=9042, protocol_version=3)
     sync_table(User)
-    sync_table(AuthenticatedVerificationEmailToken)
+    sync_table(TokenRevoked)
 
 async def get_current_user(token: str = Depends(oauth2_scheme)):
     credentials_exception = HTTPException(
@@ -36,7 +36,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
         uid: str = payload.get('uid')
         if uid is None:
             raise credentials_exception
-        token_payload = AccessTokenPayload(uid=uid)
+        token_payload = AccessToken(uid=uid)
 
     except JWTError:
         raise credentials_exception
@@ -134,6 +134,15 @@ async def email_verification(token: str):
     """
     decode email verification token
     """
+
+    token_revoked = TokenRevoked.objects.filter(token=token).allow_filtering().first()
+
+    if token_revoked:
+        return HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Token has been utilized!"
+        )
+    
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Invalid token for email verification!",
@@ -148,7 +157,7 @@ async def email_verification(token: str):
         if usage is None or usage != "email-verification":
             raise credentials_exception
         
-        token_payload = EmailVerificationTokenPayload(uid=uid, usage=usage, exp=exp)
+        token_payload = EmailVerificationToken(uid=uid, usage=usage, exp=exp)
 
     except JWTError:
         raise credentials_exception
@@ -162,21 +171,13 @@ async def email_verification(token: str):
     """
     query user info from database
     """
-    token_info = AuthenticatedVerificationEmailToken.objects.filter(token=token).allow_filtering().first()
-
-    if token_info is not None:
-        return HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Token has been utilized!"
-        )
-
     user_info = User.objects.filter(uid=token_payload.uid).allow_filtering().first()
 
     if user_info:
         User.objects.filter(uid=user_info.uid, email=user_info.email).allow_filtering().update(is_verified=True)
-        authenticated_token_ttl: int = (exp - datetime.now().timestamp()).__int__()
-        if authenticated_token_ttl > 0:
-            AuthenticatedVerificationEmailToken.objects.ttl(authenticated_token_ttl).create(token=token, uid=user_info.uid, created_at=datetime.now())
+        token_revoked_ttl: int = (exp - datetime.now().timestamp()).__int__()
+        if token_revoked_ttl > 0:
+            TokenRevoked.objects.ttl(token_revoked_ttl).create(token=token, uid=user_info.uid, created_at=datetime.now())
         return HTTPException(
             status_code=status.HTTP_202_ACCEPTED,
             detail="Email verification successful!"
@@ -188,8 +189,8 @@ async def email_verification(token: str):
         )
     
 @router.post("/resend-verification-email")
-async def resend_email_verification(resend_email: ResendVerificationEmail):
-    user_info = User.objects.filter(email=resend_email.email).allow_filtering().first()
+async def resend_email_verification(user_email: Email):
+    user_info = User.objects.filter(email=user_email.email).allow_filtering().first()
     if user_info is None:
         return HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -201,13 +202,107 @@ async def resend_email_verification(resend_email: ResendVerificationEmail):
             detail="Your email address has already been verified!"
         )
     else:
-        email_verification_token = Token.get_token(
+        access_token = Token.get_token(
             data={"uid": user_info.uid.__str__(), "usage": "email-verification"}, 
             expires_delta=timedelta(hours=1)
         )
+        print(access_token)
+        return dict(
+            access_token=access_token,
+            token_type="bearer",
+            detail="Verification email has been sent to your registered email address!"
+        )
 
-        return {"detail": "Verification email has been sent to your registered email address!"}
+@router.post("/forgot-password")
+async def send_password_reset_email(email: Email):
+    user_info = User.objects.filter(email=email.email).allow_filtering().first()
+    if user_info is None:
+        return HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Your email address has not been registered as an account!"
+        )
+    elif user_info.is_verified == True:
+        access_token = Token.get_token(
+            data={"uid": user_info.uid.__str__(), "email": user_info.email, "usage": "password-reset"}, 
+            expires_delta=timedelta(hours=1)
+        )
+        return dict(
+            access_token=access_token,
+            token_type="bearer",
+            detail="Password reset email has been sent to your registered email address!"
+        )
+        
+@router.put("/reset-password")
+async def reset_to_new_password(input: ResetToNewPassword, Authorization: Annotated[list[str] | None, Header()] = None):
+    """
+    input
+    1. new password
+    2. access token
+    """
+    import re
+    token = re.search(r'Bearer\s+(\S+)', Authorization[0]).group(1)
 
+    token_revoked = TokenRevoked.objects.filter(token=token).allow_filtering().first()
+
+    if token_revoked:
+        return HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Token has been utilized!"
+        )
+
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid token for password reset!",
+    )
+
+    try:
+        payload = Token.decode_token(token)
+        uid: str = payload.get('uid')
+        email: str = payload.get('email')
+        usage: str = payload.get('usage')
+        exp: int = payload.get('exp')
+        if uid is None:
+            raise credentials_exception
+        if usage is None or usage != "password-reset":
+            raise credentials_exception
+        
+        token_payload = PasswordResetToken(uid=uid, email=email, usage=usage, exp=exp)
+
+    except JWTError:
+        raise credentials_exception
+    
+    except ExpiredSignatureError:
+        return HTTPException(
+            status_code=status.HTTP_406_NOT_ACCEPTABLE,
+            detail="Token for password reset has expired!"
+        )
+    
+    user_info = User.objects.filter(uid=token_payload.uid, email=token_payload.email).allow_filtering().first()
+
+    if user_info:
+        User.objects.filter(uid=token_payload.uid, email=token_payload.email).allow_filtering().update(password=Hasher.get_password_hash(input.new_password))
+        token_revoked_ttl: int = (exp - datetime.now().timestamp()).__int__()
+        if token_revoked_ttl > 0:
+            TokenRevoked.objects.ttl(token_revoked_ttl).create(token=token, uid=user_info.uid, created_at=datetime.now())
+
+        expires_hours = os.getenv('ACCESS_TOKEN_EXPIRES_HOURS')
+        access_token_expires = timedelta(hours=int(expires_hours))
+        access_token = Token.get_token(
+            data={"uid": user_info.uid.__str__()},
+            expires_delta=access_token_expires
+        )
+
+        return dict(
+            access_token=access_token,
+            token_type="bearer",
+            detail="Password has been successfully reset!"
+        )
+    
+    else:
+        return HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token for password reset!",
+        )
 
 @router.post("/logout", response_model=AccessTokenInfoResponse)
 async def logout(token: str = Depends(oauth2_scheme)):

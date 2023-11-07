@@ -27,13 +27,22 @@ class AccessTokenInfoResponse(BaseModel):
     accessToken: str
     tokenType: str
 
-class AccessTokenPayload(BaseModel):
+class AccessToken(BaseModel):
     uid: Union[str, None] = None
 
-class EmailVerificationTokenPayload(BaseModel):
+class EmailVerificationToken(BaseModel):
     uid: Union[str, None]
-    usage: Union[str, None] = None
+    usage: Union[str, None] = 'email-verification'
     exp: Union[int, None] 
 
-class ResendVerificationEmail(BaseModel):
+class Email(BaseModel):
     email: EmailStr
+
+class ResetToNewPassword(BaseModel):
+    new_password: str
+
+class PasswordResetToken(BaseModel):
+    uid: str
+    email: EmailStr
+    usage: str = 'password-reset'
+    exp: int
