@@ -38,15 +38,15 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
             raise credentials_exception
         token_payload = AccessToken(uid=uid)
 
-    except JWTError:
-        raise credentials_exception
-    
     except ExpiredSignatureError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token Expired!",
             headers={"WWW-Authenticate": "Bearer"}
         )
+
+    except JWTError:
+        raise credentials_exception
     
     user_info = User.objects.filter(uid=token_payload.uid).allow_filtering().first()
 
@@ -159,15 +159,15 @@ async def email_verification(token: str):
         
         token_payload = EmailVerificationToken(uid=uid, usage=usage, exp=exp)
 
-    except JWTError:
-        raise credentials_exception
-    
     except ExpiredSignatureError:
         return HTTPException(
             status_code=status.HTTP_406_NOT_ACCEPTABLE,
             detail="Token for email verification has expired!"
         )
 
+    except JWTError:
+        raise credentials_exception
+    
     """
     query user info from database
     """
@@ -206,7 +206,6 @@ async def resend_email_verification(user_email: Email):
             data={"uid": user_info.uid.__str__(), "usage": "email-verification"}, 
             expires_delta=timedelta(hours=1)
         )
-        print(access_token)
         return dict(
             access_token=access_token,
             token_type="bearer",
@@ -268,15 +267,15 @@ async def reset_to_new_password(input: ResetToNewPassword, Authorization: Annota
         
         token_payload = PasswordResetToken(uid=uid, email=email, usage=usage, exp=exp)
 
-    except JWTError:
-        raise credentials_exception
-    
     except ExpiredSignatureError:
         return HTTPException(
             status_code=status.HTTP_406_NOT_ACCEPTABLE,
             detail="Token for password reset has expired!"
         )
-    
+
+    except JWTError:
+        raise credentials_exception
+
     user_info = User.objects.filter(uid=token_payload.uid, email=token_payload.email).allow_filtering().first()
 
     if user_info:

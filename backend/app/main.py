@@ -7,4 +7,4 @@ app.include_router(users.router)
 
 @app.get("/")
 async def main():
-    return {"message": "Welcome to SuggestMeNow!"}
+    return {"message": "Welcome to Article Compass!"}
