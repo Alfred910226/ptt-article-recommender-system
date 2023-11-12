@@ -4,8 +4,6 @@ import os
 
 from fastapi import APIRouter, status, HTTPException, Depends, Header, BackgroundTasks
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from cassandra.cqlengine.management import sync_table
-from cassandra.cqlengine import connection
 from jose import JWTError, ExpiredSignatureError
 
 from app.utils.encryptor import Hasher, Token
@@ -19,12 +17,6 @@ router = APIRouter(
 )
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
-
-@router.on_event("startup")
-async def create_table():
-    connection.setup(['cassandra'], "article_express", port=9042, protocol_version=3)
-    sync_table(User)
-    sync_table(TokenRevoked)
 
 async def get_current_user(token: str = Depends(oauth2_scheme)):
     credentials_exception = HTTPException(
@@ -233,6 +225,7 @@ async def send_password_reset_email(email: Email):
             data={"uid": user_info.uid.__str__(), "email": user_info.email, "usage": "password-reset"}, 
             expires_delta=timedelta(hours=1)
         )
+
         return dict(
             access_token=access_token,
             token_type="bearer",
