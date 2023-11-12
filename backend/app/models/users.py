@@ -4,7 +4,7 @@ import uuid
 
 
 class User(Model):
-    __keyspace__ = 'article_compass'
+    __keyspace__ = 'article_express'
     __table_name__ = 'users'
 
     uid = columns.UUID(primary_key=True, default=uuid.uuid4) 
@@ -14,7 +14,7 @@ class User(Model):
     is_verified = columns.Boolean(default=False)
 
 class TokenRevoked(Model):
-    __keyspace__ = 'article_compass'
+    __keyspace__ = 'article_express'
     __table_name__ = 'token_revoked'
     __options__ = {'default_time_to_live': 60}
 

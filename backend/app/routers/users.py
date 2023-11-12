@@ -2,7 +2,7 @@ from typing import Any, Annotated
 from datetime import datetime, timedelta
 import os
 
-from fastapi import APIRouter, status, HTTPException, Depends, Response, Header
+from fastapi import APIRouter, status, HTTPException, Depends, Header, BackgroundTasks
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from cassandra.cqlengine.management import sync_table
 from cassandra.cqlengine import connection
@@ -11,6 +11,7 @@ from jose import JWTError, ExpiredSignatureError
 from app.utils.encryptor import Hasher, Token
 from app.schemas.users import UserCreate, UserCreatedResponse, UserInfo, AccessTokenInfoResponse, AccessToken, EmailVerificationToken, ResetToNewPassword, Email, PasswordResetToken
 from app.models.users import User, TokenRevoked
+from app.utils.email import Mail
 
 router = APIRouter(
     prefix="/user",
@@ -21,7 +22,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
 @router.on_event("startup")
 async def create_table():
-    connection.setup(['cassandra'], "article_compass", port=9042, protocol_version=3)
+    connection.setup(['cassandra'], "article_express", port=9042, protocol_version=3)
     sync_table(User)
     sync_table(TokenRevoked)
 
@@ -63,7 +64,7 @@ async def get_current_active_user(current_user: UserInfo = Depends(get_current_u
     return current_user
 
 @router.post("/signup/", status_code=status.HTTP_201_CREATED, response_model=UserCreatedResponse)
-async def signup(user: UserCreate) -> Any:
+async def signup(user: UserCreate, background_tasks: BackgroundTasks) -> Any:
     user_info = User.objects.filter(email=user.email).allow_filtering().first() # 確認資料使用者是否存在
     if user_info is None:
         """
@@ -75,15 +76,19 @@ async def signup(user: UserCreate) -> Any:
         """
         email verification
         """
-        email_verification_token = Token.get_token(
+        access_token = Token.get_token(
             data={"uid": resp.uid.__str__(), "usage": "email-verification"}, 
             expires_delta=timedelta(hours=1)
         )
-        print(email_verification_token)
+
+        body = dict(
+            subject="Verify your email address.",
+            token=access_token
+        )
+        background_tasks.add_task(Mail.verification_email, recipient=resp.email, body=body)
         """
         ## this email_verification_token send by email ##
         """
-
         return {
             "message": "User registration successful",
             "details": {
@@ -129,7 +134,7 @@ async def login(from_data: OAuth2PasswordRequestForm = Depends()):
         "tokenType": "bearer"
     }
 
-@router.post("/email-verify/")
+@router.get("/email-verify/")
 async def email_verification(token: str):
     """
     decode email verification token
@@ -189,7 +194,7 @@ async def email_verification(token: str):
         )
     
 @router.post("/resend-verification-email")
-async def resend_email_verification(user_email: Email):
+async def resend_email_verification(user_email: Email, background_tasks: BackgroundTasks):
     user_info = User.objects.filter(email=user_email.email).allow_filtering().first()
     if user_info is None:
         return HTTPException(
@@ -206,9 +211,12 @@ async def resend_email_verification(user_email: Email):
             data={"uid": user_info.uid.__str__(), "usage": "email-verification"}, 
             expires_delta=timedelta(hours=1)
         )
+        body = dict(
+            subject="Verify your email address",
+            token=access_token
+        )
+        background_tasks.add_task(Mail.verification_email, recipient=user_info.email, body=body)
         return dict(
-            access_token=access_token,
-            token_type="bearer",
             detail="Verification email has been sent to your registered email address!"
         )
 
@@ -311,5 +319,6 @@ async def logout(token: str = Depends(oauth2_scheme)):
 async def auth_testing(current_user: UserInfo = Depends(get_current_active_user)): #For authentication testing
     return current_user
 
-
-    
+@router.get("/email-testing")
+async def email_testing(background_tasks: BackgroundTasks):
+    return None
