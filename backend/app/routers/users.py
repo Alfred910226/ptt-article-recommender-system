@@ -2,8 +2,10 @@ from typing import Any, Annotated
 from datetime import datetime, timedelta
 import os
 
-from fastapi import APIRouter, status, HTTPException, Depends, Header, BackgroundTasks
+from fastapi import APIRouter, status, HTTPException, Depends, Header, BackgroundTasks, Request, Response
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi.templating import Jinja2Templates
+from fastapi.responses import HTMLResponse
 from jose import JWTError, ExpiredSignatureError
 
 from app.utils.encryptor import Hasher, Token
@@ -211,9 +213,14 @@ async def resend_email_verification(user_email: Email, background_tasks: Backgro
         return dict(
             detail="Verification email has been sent to your registered email address!"
         )
+    
+@router.get("/forgot-password/page")
+async def get_forgot_password_page(request: Request):
+    templates = Jinja2Templates(directory="app/templates/forgot_password")
+    return templates.TemplateResponse("forgot_password_page.html", {"request": request})
 
 @router.post("/forgot-password")
-async def send_password_reset_email(email: Email):
+async def send_password_reset_email(email: Email, background_tasks: BackgroundTasks):
     user_info = User.objects.filter(email=email.email).allow_filtering().first()
     if user_info is None:
         return HTTPException(
@@ -226,11 +233,57 @@ async def send_password_reset_email(email: Email):
             expires_delta=timedelta(hours=1)
         )
 
+        body = dict(
+            subject="Reset password.",
+            token=access_token
+        )
+        background_tasks.add_task(Mail.password_reset_email, recipient=user_info.email, body=body)
+
         return dict(
-            access_token=access_token,
-            token_type="bearer",
             detail="Password reset email has been sent to your registered email address!"
         )
+    
+@router.get("/reset-password/page")
+async def get_password_reset_page(token: str, request: Request, response: Response):
+    token_revoked = TokenRevoked.objects.filter(token=token).allow_filtering().first()
+
+    if token_revoked:
+        return HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Token has been utilized!"
+        )
+    
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid token for password reset!",
+    )
+
+    try:
+        payload = Token.decode_token(token)
+        uid: str = payload.get('uid')
+        email: str = payload.get('email')
+        usage: str = payload.get('usage')
+        exp: int = payload.get('exp')
+        if uid is None:
+            raise credentials_exception
+        if usage is None or usage != "password-reset":
+            raise credentials_exception
+        
+        token_payload = PasswordResetToken(uid=uid, email=email, usage=usage, exp=exp)
+
+    except ExpiredSignatureError:
+        return HTTPException(
+            status_code=status.HTTP_406_NOT_ACCEPTABLE,
+            detail="Token for password reset has expired!"
+        )
+
+    except JWTError:
+        raise credentials_exception
+
+    templates = Jinja2Templates(directory="app/templates/forgot_password")
+
+    Authorization="Bearer {token}".format(token=token)
+    return templates.TemplateResponse("password_reset_page.html", {"request": request, "Authorization": Authorization})
         
 @router.put("/reset-password")
 async def reset_to_new_password(input: ResetToNewPassword, Authorization: Annotated[list[str] | None, Header()] = None):
@@ -285,16 +338,11 @@ async def reset_to_new_password(input: ResetToNewPassword, Authorization: Annota
         if token_revoked_ttl > 0:
             TokenRevoked.objects.ttl(token_revoked_ttl).create(token=token, uid=user_info.uid, created_at=datetime.now())
 
-        expires_hours = os.getenv('ACCESS_TOKEN_EXPIRES_HOURS')
-        access_token_expires = timedelta(hours=int(expires_hours))
-        access_token = Token.get_token(
-            data={"uid": user_info.uid.__str__()},
-            expires_delta=access_token_expires
-        )
+        """
+        return to sign in page
+        """
 
         return dict(
-            access_token=access_token,
-            token_type="bearer",
             detail="Password has been successfully reset!"
         )
     
