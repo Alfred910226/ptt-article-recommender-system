@@ -242,7 +242,12 @@ async def send_password_reset_email(email: Email, background_tasks: BackgroundTa
         return dict(
             detail="Password reset email has been sent to your registered email address!"
         )
-    
+    elif user_info.is_verified == False:
+        return HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Inactive user!"
+        )
+
 @router.get("/reset-password/page")
 async def get_password_reset_page(token: str, request: Request, response: Response):
     token_revoked = TokenRevoked.objects.filter(token=token).allow_filtering().first()
