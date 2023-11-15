@@ -5,149 +5,171 @@ import os
 from fastapi import APIRouter, status, HTTPException, Depends, Header, BackgroundTasks, Request, Response
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import HTMLResponse
+from fastapi.responses import JSONResponse
 from jose import JWTError, ExpiredSignatureError
 
 from app.utils.encryptor import Hasher, Token
-from app.schemas.users import UserCreate, UserCreatedResponse, UserInfo, AccessTokenInfoResponse, AccessToken, EmailVerificationToken, ResetToNewPassword, Email, PasswordResetToken
+from app.schemas.users import (
+    CreateUser, 
+    CreateUserResponse, 
+    UserInfo, 
+    AccessTokenResponse,
+    AccessToken, 
+    ResendVerificationEmailResponse, 
+    SendPasswordResetEmailResponse, 
+    EmailVerificationToken, 
+    ResetToNewPassword, 
+    ResetToNewPasswordResponse, 
+    Email, 
+    PasswordResetToken
+)
 from app.models.users import User, TokenRevoked
 from app.utils.email import Mail
 
 router = APIRouter(
-    prefix="/user",
-    tags=["user"]
+    prefix = "/user",
+    tags = ["user"]
 )
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl = "login")
 
 async def get_current_user(token: str = Depends(oauth2_scheme)):
     credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials!",
-        headers={"WWW-Authenticate": "Bearer"}
+        status_code =status.HTTP_401_UNAUTHORIZED,
+        detail = "Could not validate credentials!",
+        headers = {"WWW-Authenticate": "Bearer"}
     )
     try:
         payload = Token.decode_token(token)
         uid: str = payload.get('uid')
         if uid is None:
             raise credentials_exception
-        token_payload = AccessToken(uid=uid)
+        token_payload = AccessToken(uid = uid)
 
     except ExpiredSignatureError:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token Expired!",
-            headers={"WWW-Authenticate": "Bearer"}
+            status_code = status.HTTP_401_UNAUTHORIZED,
+            detail = "Token Expired!",
+            headers = {"WWW-Authenticate": "Bearer"}
         )
 
     except JWTError:
         raise credentials_exception
     
-    user_info = User.objects.filter(uid=token_payload.uid).allow_filtering().first()
+    user_info = User.objects.filter(uid = token_payload.uid).allow_filtering().first()
 
     if user_info is None:
         raise credentials_exception
-    return dict(uid=user_info.uid, email=user_info.email, created_at=user_info.created_at, is_verified=user_info.is_verified)
+    return dict(
+        uid = user_info.uid, 
+        email = user_info.email, 
+        created_at = user_info.created_at, 
+        is_verified = user_info.is_verified
+    )
 
 async def get_current_active_user(current_user: UserInfo = Depends(get_current_user)):
     if current_user.get('is_verified') is False:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Inactive user"
+            status_code = status.HTTP_400_BAD_REQUEST,
+            detail = "Inactive user"
         )
     return current_user
 
-@router.post("/signup/", status_code=status.HTTP_201_CREATED, response_model=UserCreatedResponse)
-async def signup(user: UserCreate, background_tasks: BackgroundTasks) -> Any:
-    user_info = User.objects.filter(email=user.email).allow_filtering().first() # 確認資料使用者是否存在
+@router.post("/signup/", status_code = status.HTTP_201_CREATED, response_model = CreateUserResponse)
+async def signup(user: CreateUser, background_tasks: BackgroundTasks):
+    user_info = User.objects.filter(email = user.email).allow_filtering().first() # 確認資料使用者是否存在
     if user_info is None:
         """
         create user profile
         """
-        resp = User.create(email=user.email, 
-                           password=Hasher.get_password_hash(user.password), 
-                           created_at=datetime.now())
+        resp = User.create(
+            email = user.email, 
+            password = Hasher.get_password_hash(user.password), 
+            created_at = datetime.now()
+        )
         """
         email verification
         """
         access_token = Token.get_token(
-            data={"uid": resp.uid.__str__(), "usage": "email-verification"}, 
-            expires_delta=timedelta(hours=1)
+            data = {
+                "uid": resp.uid.__str__(), 
+                "usage": "email-verification"
+            }, 
+            expires_delta = timedelta(hours=1)
         )
-
         body = dict(
-            subject="Verify your email address.",
-            token=access_token
+            subject = "Verify your email address.",
+            token = access_token
         )
-        background_tasks.add_task(Mail.verification_email, recipient=resp.email, body=body)
-        """
-        ## this email_verification_token send by email ##
-        """
-        return {
-            "message": "User registration successful",
-            "details": {
-                "id": resp.uid.__str__(),
-                "email": resp.email,
-                "createdAt": resp.created_at.strftime('%Y-%m-%d %H:%M:%S'),
-                "isVerified": False
-            }
-        }
-        
+        background_tasks.add_task(
+            Mail.verification_email, 
+            recipient=resp.email, 
+            body=body
+        )
+        return dict(
+            message = "User registration successful",
+            details = dict(
+                id = resp.uid.__str__(),
+                email = resp.email,
+                created_at = resp.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+                is_verified = resp.is_verified
+            )
+        )
     else:
         """
         1. raise account exist error
         """
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Email is already registered!"
+            status_code = status.HTTP_409_CONFLICT,
+            detail = "Email is already registered!"
         )
     
-@router.post("/login", response_model=AccessTokenInfoResponse)
+@router.post("/login", response_model = AccessTokenResponse)
 async def login(from_data: OAuth2PasswordRequestForm = Depends()):
     user_info = User.objects.filter(email=from_data.username).allow_filtering().first()
     if user_info is None:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Incorrect username!"
+            status_code = status.HTTP_400_BAD_REQUEST,
+            detail = "Incorrect username!"
         )
     if not Hasher.verify_password(from_data.password, user_info.password):
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Incorrect password!"
+            status_code = status.HTTP_400_BAD_REQUEST,
+            detail = "Incorrect password!"
         )
 
     expires_hours = os.getenv('ACCESS_TOKEN_EXPIRES_HOURS')
     access_token_expires = timedelta(hours=int(expires_hours))
     access_token = Token.get_token(
-        data={"uid": user_info.uid.__str__()},
+        data={
+            "uid": user_info.uid.__str__()
+        },
         expires_delta=access_token_expires
     )
-    
-    return {
-        "accessToken": access_token,
-        "tokenType": "bearer"
-    }
+    return dict(
+        access_token = access_token,
+        token_type = "bearer"
+    )
 
 @router.get("/email-verify/")
 async def email_verification(token: str):
     """
     decode email verification token
     """
-
-    token_revoked = TokenRevoked.objects.filter(token=token).allow_filtering().first()
+    token_revoked: dict = TokenRevoked.objects.filter(token = token).allow_filtering().first()
 
     if token_revoked:
         return HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Token has been utilized!"
+            status_cod = status.HTTP_403_FORBIDDEN,
+            detail = "Token has been utilized!"
         )
     
     credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Invalid token for email verification!",
+        status_code = status.HTTP_401_UNAUTHORIZED,
+        detail = "Invalid token for email verification!",
     )
     try:
-        payload = Token.decode_token(token)
+        payload: dict = Token.decode_token(token)
         uid: str = payload.get('uid')
         usage: str = payload.get('usage')
         exp: int = payload.get('exp')
@@ -156,12 +178,16 @@ async def email_verification(token: str):
         if usage is None or usage != "email-verification":
             raise credentials_exception
         
-        token_payload = EmailVerificationToken(uid=uid, usage=usage, exp=exp)
+        token_payload = EmailVerificationToken(
+            uid = uid, 
+            usage = usage, 
+            exp = exp
+        )
 
     except ExpiredSignatureError:
         return HTTPException(
-            status_code=status.HTTP_406_NOT_ACCEPTABLE,
-            detail="Token for email verification has expired!"
+            status_code = status.HTTP_406_NOT_ACCEPTABLE,
+            detail = "Token for email verification has expired!"
         )
 
     except JWTError:
@@ -170,7 +196,7 @@ async def email_verification(token: str):
     """
     query user info from database
     """
-    user_info = User.objects.filter(uid=token_payload.uid).allow_filtering().first()
+    user_info: dict = User.objects.filter(uid = token_payload.uid).allow_filtering().first()
 
     if user_info:
         User.objects.filter(uid=user_info.uid, email=user_info.email).allow_filtering().update(is_verified=True)
@@ -178,119 +204,149 @@ async def email_verification(token: str):
         if token_revoked_ttl > 0:
             TokenRevoked.objects.ttl(token_revoked_ttl).create(token=token, uid=user_info.uid, created_at=datetime.now())
         return HTTPException(
-            status_code=status.HTTP_202_ACCEPTED,
-            detail="Email verification successful!"
+            status_code = status.HTTP_202_ACCEPTED,
+            detail = "Email verification successful!"
         )
     else:
         return HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="User with email {email} does not exist!".format(email=user_info.email)
+            status_code = status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail = "User with email {email} does not exist!".format(email=user_info.email)
         )
     
-@router.post("/resend-verification-email")
-async def resend_email_verification(user_email: Email, background_tasks: BackgroundTasks):
-    user_info = User.objects.filter(email=user_email.email).allow_filtering().first()
+@router.post("/resend-verification-email", response_model=ResendVerificationEmailResponse, status_code=status.HTTP_200_OK)
+async def resend_verification_email(user_email: Email, background_tasks: BackgroundTasks):
+    user_info: dict = User.objects.filter(email = user_email.email).allow_filtering().first()
     if user_info is None:
         return HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Your email address has not been registered as an account!"
+            status_code = status.HTTP_404_NOT_FOUND,
+            detail = "Your email address has not been registered as an account!"
         )
     elif user_info.is_verified == True:
         return HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Your email address has already been verified!"
+            status_code = status.HTTP_409_CONFLICT,
+            detail = "Your email address has already been verified!"
         )
     else:
-        access_token = Token.get_token(
-            data={"uid": user_info.uid.__str__(), "usage": "email-verification"}, 
-            expires_delta=timedelta(hours=1)
+        access_token: dict = Token.get_token(
+            data = {
+                "uid": user_info.uid.__str__(), 
+                "usage": "email-verification"
+            }, 
+            expires_delta = timedelta(hours=1)
         )
         body = dict(
-            subject="Verify your email address",
-            token=access_token
+            subject = "Verify your email address",
+            token = access_token
         )
-        background_tasks.add_task(Mail.verification_email, recipient=user_info.email, body=body)
-        return dict(
-            detail="Verification email has been sent to your registered email address!"
+        background_tasks.add_task(
+            Mail.verification_email, 
+            recipient = user_info.email, 
+            body = body
+        )
+        return JSONResponse(
+            content = dict(
+                detail = "Verification email has been sent to your registered email address!"
+            ),
+            status_code = status.HTTP_200_OK
         )
     
 @router.get("/forgot-password/page")
 async def get_forgot_password_page(request: Request):
-    templates = Jinja2Templates(directory="app/templates/forgot_password")
-    return templates.TemplateResponse("forgot_password_page.html", {"request": request})
+    templates = Jinja2Templates(
+        directory = "app/templates/forgot_password"
+    )
+    return templates.TemplateResponse(
+        "forgot_password_page.html", 
+        {"request": request}
+    )
 
-@router.post("/forgot-password")
+@router.post("/forgot-password", response_model=SendPasswordResetEmailResponse)
 async def send_password_reset_email(email: Email, background_tasks: BackgroundTasks):
-    user_info = User.objects.filter(email=email.email).allow_filtering().first()
+    user_info: dict = User.objects.filter(email=email.email).allow_filtering().first()
     if user_info is None:
         return HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Your email address has not been registered as an account!"
+            status_code = status.HTTP_404_NOT_FOUND,
+            detail = "Your email address has not been registered as an account!"
         )
     elif user_info.is_verified == True:
         access_token = Token.get_token(
-            data={"uid": user_info.uid.__str__(), "email": user_info.email, "usage": "password-reset"}, 
-            expires_delta=timedelta(hours=1)
+            data = {
+                "uid": user_info.uid.__str__(), 
+                "email": user_info.email, 
+                "usage": "password-reset"
+            }, 
+            expires_delta = timedelta(hours=1)
         )
 
         body = dict(
-            subject="Reset password.",
-            token=access_token
+            subject = "Reset password.",
+            token = access_token
         )
-        background_tasks.add_task(Mail.password_reset_email, recipient=user_info.email, body=body)
+        background_tasks.add_task(
+            Mail.password_reset_email, 
+            recipient = user_info.email, 
+            body = body
+        )
+        return JSONResponse(
+            content = dict(
+                detail = "Password reset email has been sent to your registered email address!"
+            ),
+            status_code = status.HTTP_200_OK
+        )
 
-        return dict(
-            detail="Password reset email has been sent to your registered email address!"
-        )
     elif user_info.is_verified == False:
         return HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Inactive user!"
+            status_code = status.HTTP_400_BAD_REQUEST,
+            detail = "Inactive user!"
         )
 
 @router.get("/reset-password/page")
 async def get_password_reset_page(token: str, request: Request, response: Response):
-    token_revoked = TokenRevoked.objects.filter(token=token).allow_filtering().first()
+
+    token_revoked: dict = TokenRevoked.objects.filter(token=token).allow_filtering().first()
 
     if token_revoked:
         return HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Token has been utilized!"
+            status_code = status.HTTP_403_FORBIDDEN,
+            detail = "Token has been utilized!"
         )
     
     credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Invalid token for password reset!",
+        status_code = status.HTTP_401_UNAUTHORIZED,
+        detail = "Invalid token for password reset!",
     )
 
     try:
-        payload = Token.decode_token(token)
+        payload: dict = Token.decode_token(token)
         uid: str = payload.get('uid')
-        email: str = payload.get('email')
         usage: str = payload.get('usage')
-        exp: int = payload.get('exp')
         if uid is None:
             raise credentials_exception
         if usage is None or usage != "password-reset":
             raise credentials_exception
         
-        token_payload = PasswordResetToken(uid=uid, email=email, usage=usage, exp=exp)
-
     except ExpiredSignatureError:
         return HTTPException(
-            status_code=status.HTTP_406_NOT_ACCEPTABLE,
-            detail="Token for password reset has expired!"
+            status_code = status.HTTP_406_NOT_ACCEPTABLE,
+            detail = "Token for password reset has expired!"
         )
-
+    
     except JWTError:
         raise credentials_exception
 
-    templates = Jinja2Templates(directory="app/templates/forgot_password")
+    templates = Jinja2Templates(
+        directory = "app/templates/forgot_password"
+    )
 
-    Authorization="Bearer {token}".format(token=token)
-    return templates.TemplateResponse("password_reset_page.html", {"request": request, "Authorization": Authorization})
+    Authorization = "Bearer {token}".format(
+        token = token
+    )
+    return templates.TemplateResponse(
+        "password_reset_page.html", 
+        {"request": request, "Authorization": Authorization}
+    )
         
-@router.put("/reset-password")
+@router.put("/reset-password", response_model=ResetToNewPasswordResponse)
 async def reset_to_new_password(input: ResetToNewPassword, Authorization: Annotated[list[str] | None, Header()] = None):
     """
     input
@@ -300,17 +356,17 @@ async def reset_to_new_password(input: ResetToNewPassword, Authorization: Annota
     import re
     token = re.search(r'Bearer\s+(\S+)', Authorization[0]).group(1)
 
-    token_revoked = TokenRevoked.objects.filter(token=token).allow_filtering().first()
+    token_revoked: dict = TokenRevoked.objects.filter(token = token).allow_filtering().first()
 
     if token_revoked:
         return HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Token has been utilized!"
+            status_code = status.HTTP_403_FORBIDDEN,
+            detail = "Token has been utilized!"
         )
 
     credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Invalid token for password reset!",
+        status_code = status.HTTP_401_UNAUTHORIZED,
+        detail = "Invalid token for password reset!",
     )
 
     try:
@@ -324,40 +380,47 @@ async def reset_to_new_password(input: ResetToNewPassword, Authorization: Annota
         if usage is None or usage != "password-reset":
             raise credentials_exception
         
-        token_payload = PasswordResetToken(uid=uid, email=email, usage=usage, exp=exp)
+        token_payload = PasswordResetToken(
+            uid = uid, 
+            email = email, 
+            usage = usage, 
+            exp = exp
+        )
 
     except ExpiredSignatureError:
         return HTTPException(
-            status_code=status.HTTP_406_NOT_ACCEPTABLE,
-            detail="Token for password reset has expired!"
+            status_code = status.HTTP_406_NOT_ACCEPTABLE,
+            detail = "Token for password reset has expired!"
         )
 
     except JWTError:
         raise credentials_exception
 
-    user_info = User.objects.filter(uid=token_payload.uid, email=token_payload.email).allow_filtering().first()
+    user_info = User.objects.filter(uid = token_payload.uid, email = token_payload.email).allow_filtering().first()
 
     if user_info:
-        User.objects.filter(uid=token_payload.uid, email=token_payload.email).allow_filtering().update(password=Hasher.get_password_hash(input.new_password))
+        User.objects.filter(uid = token_payload.uid, email = token_payload.email).allow_filtering().update(password = Hasher.get_password_hash(input.new_password))
         token_revoked_ttl: int = (exp - datetime.now().timestamp()).__int__()
         if token_revoked_ttl > 0:
-            TokenRevoked.objects.ttl(token_revoked_ttl).create(token=token, uid=user_info.uid, created_at=datetime.now())
+            TokenRevoked.objects.ttl(token_revoked_ttl).create(token = token, uid = user_info.uid, created_at = datetime.now())
 
         """
-        return to sign in page
+        Add return to sign in page
         """
-
-        return dict(
-            detail="Password has been successfully reset!"
+        return JSONResponse(
+            dict(
+                detail = "Password has been successfully reset!"
+            ),
+            status_code = status.HTTP_200_OK
         )
     
     else:
         return HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token for password reset!",
+            status_code = status.HTTP_401_UNAUTHORIZED,
+            detail = "Invalid token for password reset!"
         )
 
-@router.post("/logout", response_model=AccessTokenInfoResponse)
+@router.post("/logout", response_model=AccessTokenResponse)
 async def logout(token: str = Depends(oauth2_scheme)):
     return None
 
