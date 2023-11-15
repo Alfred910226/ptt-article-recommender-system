@@ -106,14 +106,17 @@ async def signup(user: CreateUser, background_tasks: BackgroundTasks):
             recipient=resp.email, 
             body=body
         )
-        return dict(
-            message = "User registration successful",
-            details = dict(
-                id = resp.uid.__str__(),
-                email = resp.email,
-                created_at = resp.created_at.strftime('%Y-%m-%d %H:%M:%S'),
-                is_verified = resp.is_verified
-            )
+        return JSONResponse(
+            content = dict(
+                message = "User registration successful",
+                details = dict(
+                    id = resp.uid.__str__(),
+                    email = resp.email,
+                    created_at = resp.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+                    is_verified = resp.is_verified
+                )
+            ),
+            status_code=status.HTTP_200_OK
         )
     else:
         """
@@ -146,9 +149,12 @@ async def login(from_data: OAuth2PasswordRequestForm = Depends()):
         },
         expires_delta=access_token_expires
     )
-    return dict(
-        access_token = access_token,
-        token_type = "bearer"
+    return JSONResponse(
+        content = dict(
+            access_token = access_token,
+            token_type = "bearer"
+        ),
+        status_code=status.HTTP_200_OK
     )
 
 @router.get("/email-verify/")
