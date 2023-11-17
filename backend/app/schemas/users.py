@@ -2,7 +2,7 @@ from typing import Dict, Union
 from pydantic import BaseModel, EmailStr
 
 class UserInfo(BaseModel):
-    id: str
+    uid: str
     email: EmailStr
     created_at: str
     is_verified: bool
@@ -20,7 +20,7 @@ class AccessToken(BaseModel):
 
 class AccessTokenResponse(BaseModel):
     access_token: str
-    token_type: str
+    token_type: str = 'bearer'
 
 class ResendVerificationEmailResponse(BaseModel):
     detail: str
@@ -32,6 +32,9 @@ class EmailVerificationToken(BaseModel):
     uid: Union[str, None]
     usage: str = 'email-verification'
     exp: Union[int, None] 
+
+class EmailVerificationResponse(BaseModel):
+    detail: str
 
 class Email(BaseModel):
     email: EmailStr
@@ -47,3 +50,6 @@ class PasswordResetToken(BaseModel):
     email: EmailStr
     usage: str = 'password-reset'
     exp: int
+
+class LogoutResponse(BaseModel):
+    detail: str = "Your account has been successfully logged out!"

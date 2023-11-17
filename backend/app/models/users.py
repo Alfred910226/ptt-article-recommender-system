@@ -12,6 +12,7 @@ class User(Model):
     password = columns.Text()
     created_at = columns.DateTime()
     is_verified = columns.Boolean(default=False)
+    logout = columns.Boolean(default=True)
 
 class TokenRevoked(Model):
     __keyspace__ = 'article_express'
