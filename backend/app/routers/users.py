@@ -26,6 +26,7 @@ from app.schemas.users import (
 )
 from app.models.users import User, TokenRevoked
 from app.utils.email import Mail
+from app.redis.base import r
 
 router = APIRouter(
     prefix = "/user",
@@ -226,6 +227,11 @@ async def email_verification(token: str):
     
 @router.post("/resend-verification-email", status_code = status.HTTP_200_OK, response_model = ResendVerificationEmailResponse)
 async def resend_verification_email(user_email: Email, background_tasks: BackgroundTasks):
+    if r.get(user_email.email) is not None:
+        raise HTTPException(
+            status_code=status.HTTP_202_ACCEPTED,
+            detail="Email is being sent!"
+        )
     user_info: dict = User.objects.filter(email = user_email.email).allow_filtering().first()
     if user_info is None:
         raise HTTPException(

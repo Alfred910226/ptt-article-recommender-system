@@ -11,7 +11,7 @@ services:
     ports:
       - "80:80"
     networks:
-      - smn-network
+      - article-express-network
     depends_on:
       - cassandra
     env_file:
@@ -24,17 +24,24 @@ services:
     ports:
       - "9042:9042"
     networks:
-      - smn-network
+      - article-express-network
     environment:
       - CQLENG_ALLOW_SCHEMA_MANAGEMENT=1
+
+  redis:
+    image: redis:7.2.3
+    ports:
+      - "6379:6379"
+    networks:
+      - article-express-network
 
   jupyter-notebook:
     image: jupyter/datascience-notebook
     ports:
       - "8888:8888"
     networks:
-      - smn-network
+      - article-express-network
 
 networks:
-  smn-network:
+  article-express-network:
     driver: bridge

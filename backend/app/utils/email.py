@@ -4,10 +4,12 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
 from jinja2 import Environment, FileSystemLoader
+from app.redis.base import r
 
 class Mail:
     @staticmethod
     def verification_email(recipient, body):
+        r.set(recipient, 'sending')
         message = MIMEMultipart("alternative")
         message["Subject"] = body.get('subject')
         message["From"] = os.getenv('MAIL_FROM')
@@ -24,6 +26,7 @@ class Mail:
             server.sendmail(
                 os.getenv('MAIL_FROM'), recipient, message.as_string()
             )
+        r.delete(recipient)
 
     @staticmethod
     def password_reset_email(recipient, body):
