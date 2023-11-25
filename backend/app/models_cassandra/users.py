@@ -1,0 +1,11 @@
+from cassandra.cqlengine.models import Model
+from cassandra.cqlengine import columns
+
+class TokenRevoked(Model):
+    __keyspace__ = 'article_express'
+    __table_name__ = 'token_revoked'
+    __options__ = {'default_time_to_live': 60}
+
+    token = columns.Text(primary_key=True)
+    uid = columns.UUID()
+    created_at = columns.DateTime()
