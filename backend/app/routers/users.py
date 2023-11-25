@@ -34,11 +34,10 @@ from app.crud.users import (
 )
 
 from app.models_postgres import users
-from app.models_cassandra.users import TokenRevoked
+from app.models_cassandra.users import TokenRevoked, EmailInProcess
 from app.database import engine
 from app.database import SessionLocal
 from app.utils.email import Mail
-from app.redis.base import r
 
 users.Base.metadata.create_all(bind=engine)
 
@@ -80,7 +79,6 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
         raise credentials_exception
 
     user_info = get_user_info_by_uid(db = db, uid = token_payload.uid)
-    print(user_info)
 
     if user_info is None:
         raise credentials_exception
@@ -267,7 +265,12 @@ async def email_verification(token: str, db: Session = Depends(get_db)):
     
 @router.post("/resend-verification-email", status_code = status.HTTP_200_OK, response_model = ResendVerificationEmailResponse)
 async def resend_verification_email(user_email: Email, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    if r.get(user_email.email) is not None:
+    response = EmailInProcess.objects.filter(
+        task_source = "email-verification",
+        email = user_email.email
+    ).allow_filtering().first()
+
+    if response is not None:
         raise HTTPException(
             status_code=status.HTTP_202_ACCEPTED,
             detail="Email is being sent!"
@@ -321,6 +324,17 @@ async def get_forgot_password_page(request: Request):
 
 @router.post("/forgot-password", status_code = status.HTTP_200_OK, response_model=SendPasswordResetEmailResponse)
 async def send_password_reset_email(email: Email, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    response = EmailInProcess.objects.filter(
+        task_source = "password-reset",
+        email = email.email
+    ).allow_filtering().first()
+
+    if response is not None:
+        raise HTTPException(
+            status_code=status.HTTP_202_ACCEPTED,
+            detail="Email is being sent!"
+        )
+
     user_info = get_user_info_by_email( # 確認資料使用者是否存在
         db = db, 
         email = email.email

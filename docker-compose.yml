@@ -44,13 +44,6 @@ services:
     environment:
       - CQLENG_ALLOW_SCHEMA_MANAGEMENT=1
 
-  redis:
-    image: redis:7.2.3
-    ports:
-      - "6379:6379"
-    networks:
-      - article-express-network
-
   jupyter-notebook:
     image: jupyter/datascience-notebook
     ports:
