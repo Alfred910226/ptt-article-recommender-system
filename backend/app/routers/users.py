@@ -453,7 +453,7 @@ async def get_password_reset_page(token: str, request: Request, response: Respon
     )
         
 @router.put("/reset-password", status_code = status.HTTP_200_OK, response_model = ResetToNewPasswordResponse)
-async def reset_to_new_password(input: ResetToNewPassword, Authorization: Annotated[list[str] | None, Header()] = None, db: Session = Depends(get_db)):
+async def reset_to_new_password(response: Response, input: ResetToNewPassword, Authorization: Annotated[list[str] | None, Header()] = None, db: Session = Depends(get_db)):
     """
     input
     1. new password
@@ -523,8 +523,11 @@ async def reset_to_new_password(input: ResetToNewPassword, Authorization: Annota
             pass
 
         access_token_revoked_ttl: int = (access_token_exp - datetime.now().timestamp()).__int__()
+        
         if access_token_revoked_ttl > 0:
             TokenRevoked.objects.ttl(access_token_revoked_ttl).create(token = user_info.access_token, uid = user_info.uid, created_at = datetime.now())
+            
+    response.delete_cookie('refresh-token')
 
     if user_info:
         update_user_password(
