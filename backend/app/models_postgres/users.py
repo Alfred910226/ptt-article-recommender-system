@@ -14,3 +14,4 @@ class Users(Base):
     password = Column(String)
     created_at = Column(DateTime, server_default = func.now())
     is_verified = Column(Boolean, default=False)
+    access_token = Column(String)

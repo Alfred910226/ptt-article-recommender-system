@@ -32,5 +32,13 @@ def update_user_password(db: Session, uid: str, password: str):
     db.refresh(user)
     return user
 
+def update_access_token(db: Session, uid: str, access_token: str):
+    user = db.query(Users).filter(Users.uid == uid).first()
+    user.access_token = access_token
+    db.commit()
+    db.refresh(user)
+    return user
+
+
 
 

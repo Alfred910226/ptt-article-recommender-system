@@ -30,7 +30,8 @@ from app.crud.users import (
     get_user_info_by_uid,
     create_user,
     activate_user_account,
-    update_user_password
+    update_user_password,
+    update_access_token
 )
 
 from app.models_postgres import users
@@ -208,6 +209,12 @@ async def login(response: Response, from_data: OAuth2PasswordRequestForm = Depen
         expires_delta=refresh_token_expires
     )
 
+    update_access_token(
+        db = db, 
+        uid = user_info.uid, 
+        access_token = access_token
+    )
+
     response.set_cookie(
         "refresh-token", 
         refresh_token, 
@@ -277,7 +284,7 @@ async def email_verification(token: str, db: Session = Depends(get_db)):
 
         token_revoked_ttl: int = (exp - datetime.now().timestamp()).__int__()
         if token_revoked_ttl > 0:
-            TokenRevoked.objects.ttl(token_revoked_ttl).create(token=token, uid=user_info.uid, created_at=datetime.now())
+            TokenRevoked.objects.ttl(token_revoked_ttl).create(token = token, uid = user_info.uid, created_at = datetime.now())
         return dict(
             detail = "Email verification successful!"
         )
@@ -497,8 +504,27 @@ async def reset_to_new_password(input: ResetToNewPassword, Authorization: Annota
 
     user_info = get_user_info_by_uid( # 確認資料使用者是否存在
         db = db, 
-        uid = token_payload.uid
-    ) 
+        uid =
+        token_payload.uid
+    )
+
+    if user_info.access_token is not None:
+        try:
+            access_token_payload = Token.decode_access_token(user_info.access_token)
+            access_token_exp: int = access_token_payload.get('exp')
+            if access_token_exp is None:
+                print("========== DEBUG ==========")
+                print("Expire time of access token from DB does not exist!")
+
+        except ExpiredSignatureError:
+            pass
+
+        except JWTError:
+            pass
+
+        access_token_revoked_ttl: int = (access_token_exp - datetime.now().timestamp()).__int__()
+        if access_token_revoked_ttl > 0:
+            TokenRevoked.objects.ttl(access_token_revoked_ttl).create(token = user_info.access_token, uid = user_info.uid, created_at = datetime.now())
 
     if user_info:
         update_user_password(
@@ -581,6 +607,12 @@ async def refresh_token(request: Request, response: Response, db: Session = Depe
         expires_delta=refresh_token_expires
     )
 
+    update_access_token(
+        db = db, 
+        uid = user_info.uid, 
+        access_token = access_token
+    )
+
     response.set_cookie(
         "refresh-token", 
         refresh_token, 
@@ -632,8 +664,15 @@ async def logout(response: Response, token: str = Depends(oauth2_scheme), db: Se
     if token_revoked_ttl > 0:
         TokenRevoked.objects.ttl(token_revoked_ttl).create(
             token = token, 
-            uid = token_payload.uid
+            uid = token_payload.uid,
+            created_at = datetime.now()
         )
+
+    update_access_token(
+        db = db, 
+        uid = user_info.uid, 
+        access_token = None
+    )
 
     response.delete_cookie("refresh-token")
     return dict(

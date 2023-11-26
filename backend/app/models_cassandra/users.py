@@ -4,6 +4,7 @@ from cassandra.cqlengine.models import Model
 from cassandra.cqlengine import columns
 
 
+
 class TokenRevoked(Model):
     __keyspace__ = 'article_express'
     __table_name__ = 'token_revoked'
@@ -11,7 +12,7 @@ class TokenRevoked(Model):
 
     token = columns.Text(primary_key=True)
     uid = columns.UUID()
-    created_at = columns.DateTime(default=datetime.now())
+    created_at = columns.DateTime()
 
 class EmailInProcess(Model):
     __keyspace__ = 'article_express'
@@ -20,4 +21,4 @@ class EmailInProcess(Model):
 
     task_source = columns.Text(primary_key=True)
     email = columns.Text(primary_key=True)
-    created_at = columns.DateTime(default=datetime.now())
+    created_at = columns.DateTime()
