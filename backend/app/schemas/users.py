@@ -17,6 +17,7 @@ class CreateUserResponse(BaseModel):
 
 class AccessToken(BaseModel):
     uid: Union[str, None] = None
+    exp: int
 
 class AccessTokenResponse(BaseModel):
     access_token: str

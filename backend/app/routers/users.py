@@ -56,17 +56,30 @@ def get_db():
         db.close()
 
 async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> UserInfo:
+
+    logout = TokenRevoked.objects.filter(token = token).allow_filtering().first()
+
+    if logout is not None:
+        raise HTTPException(
+            status_code=status.HTTP_205_RESET_CONTENT,
+            detail="The account has been logged out. Please login again!",
+            headers = {"WWW-Authenticate": "Bearer"}
+        )
+
     credentials_exception = HTTPException(
         status_code =status.HTTP_401_UNAUTHORIZED,
         detail = "Could not validate credentials!",
         headers = {"WWW-Authenticate": "Bearer"}
     )
     try:
-        payload = Token.decode_token(token)
+        payload = Token.decode_access_token(token)
         uid: str = payload.get('uid')
+        exp: int = payload.get('exp')
         if uid is None:
             raise credentials_exception
-        token_payload = AccessToken(uid = uid)
+        if exp is None:
+            raise credentials_exception
+        token_payload = AccessToken(uid = uid, exp = exp)
 
     except ExpiredSignatureError:
         raise HTTPException(
@@ -83,13 +96,6 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     if user_info is None:
         raise credentials_exception
     
-    # if user_info.logout is True:
-    #     raise HTTPException(
-    #         status_code=status.HTTP_205_RESET_CONTENT,
-    #         detail="The account has been logged out. Please login again!",
-    #         headers = {"WWW-Authenticate": "Bearer"}
-    #     )
-
     return dict(
         uid = user_info.uid, 
         email = user_info.email, 
@@ -129,7 +135,7 @@ async def signup(user: CreateUser, background_tasks: BackgroundTasks, db: Sessio
         """
         email verification
         """
-        access_token = Token.get_token(
+        access_token = Token.get_access_token(
             data = {
                 "uid": user_resp.uid.__str__(), 
                 "usage": "email-verification"
@@ -165,7 +171,7 @@ async def signup(user: CreateUser, background_tasks: BackgroundTasks, db: Sessio
         )
     
 @router.post("/login", status_code = status.HTTP_200_OK, response_model = AccessTokenResponse)
-async def login(from_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+async def login(response: Response, from_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
 
     user_info = get_user_info_by_email(
         db = db, 
@@ -183,13 +189,31 @@ async def login(from_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
             detail = "Incorrect password!"
         )
 
-    expires_hours = os.getenv('ACCESS_TOKEN_EXPIRES_HOURS')
-    access_token_expires = timedelta(hours=int(expires_hours))
-    access_token = Token.get_token(
+    access_token_expires_hours = os.getenv('ACCESS_TOKEN_EXPIRES_HOURS')
+    access_token_expires = timedelta(hours=int(access_token_expires_hours))
+    access_token = Token.get_access_token(
         data={
             "uid": user_info.uid.__str__()
         },
         expires_delta=access_token_expires
+    )
+
+    refresh_token_expires_hours = os.getenv('REFRESH_TOKEN_EXPIRES_HOURS')
+    refresh_token_expires = timedelta(hours=int(refresh_token_expires_hours))
+    refresh_token = Token.get_refresh_token(
+        data={
+            "uid": user_info.uid.__str__(),
+            "usage": "refresh-token"
+        },
+        expires_delta=refresh_token_expires
+    )
+
+    response.set_cookie(
+        "refresh-token", 
+        refresh_token, 
+        httponly = True, 
+        secure = False,
+        max_age = int(refresh_token_expires_hours) * 60 * 60 * 1000
     )
 
     return dict(
@@ -215,7 +239,7 @@ async def email_verification(token: str, db: Session = Depends(get_db)):
         detail = "Invalid token for email verification!",
     )
     try:
-        payload: dict = Token.decode_token(token)
+        payload: dict = Token.decode_access_token(token)
         uid: str = payload.get('uid')
         usage: str = payload.get('usage')
         exp: int = payload.get('exp')
@@ -292,7 +316,7 @@ async def resend_verification_email(user_email: Email, background_tasks: Backgro
             detail = "Your email address has already been verified!"
         )
     else:
-        access_token: dict = Token.get_token(
+        access_token: dict = Token.get_access_token(
             data = {
                 "uid": user_info.uid.__str__(), 
                 "usage": "email-verification"
@@ -345,7 +369,7 @@ async def send_password_reset_email(email: Email, background_tasks: BackgroundTa
             detail = "Your email address has not been registered as an account!"
         )
     elif user_info.is_verified == True:
-        access_token = Token.get_token(
+        access_token = Token.get_access_token(
             data = {
                 "uid": user_info.uid.__str__(), 
                 "email": user_info.email, 
@@ -392,7 +416,7 @@ async def get_password_reset_page(token: str, request: Request, response: Respon
     )
 
     try:
-        payload: dict = Token.decode_token(token)
+        payload: dict = Token.decode_access_token(token)
         uid: str = payload.get('uid')
         usage: str = payload.get('usage')
         if uid is None:
@@ -445,7 +469,7 @@ async def reset_to_new_password(input: ResetToNewPassword, Authorization: Annota
     )
 
     try:
-        payload = Token.decode_token(token)
+        payload = Token.decode_access_token(token)
         uid: str = payload.get('uid')
         email: str = payload.get('email')
         usage: str = payload.get('usage')
@@ -498,15 +522,123 @@ async def reset_to_new_password(input: ResetToNewPassword, Authorization: Annota
             status_code = status.HTTP_401_UNAUTHORIZED,
             detail = "Invalid token for password reset!"
         )
+    
+@router.post("/refresh-token")
+async def refresh_token(request: Request, response: Response, db: Session = Depends(get_db)):
+    refresh_token = request.cookies.get('refresh-token')
 
-# @router.post("/logout", response_model = LogoutResponse)
-# async def logout(current_user: UserInfo = Depends(get_current_active_user)):
-#     uid: str = current_user.get('uid')
-#     email: str = current_user.get('email')
-#     User.objects(uid = uid, email = email).update(logout=True)
-#     return dict(
-#         detail="Your account has been successfully logged out!"
-#     )
+    if refresh_token is None:
+        raise HTTPException(
+            status_code=status.HTTP_205_RESET_CONTENT,
+            detail="The account has been logged out. Please login again!",
+            headers = {"WWW-Authenticate": "Bearer"}
+        )
+
+    credentials_exception = HTTPException(
+        status_code = status.HTTP_401_UNAUTHORIZED,
+        detail = "Invalid token for refresh token!",
+    )
+
+    try:
+        payload = Token.decode_refresh_token(refresh_token)
+        uid: str = payload.get('uid')
+        usage: str = payload.get('usage')
+        if uid is None:
+            raise credentials_exception
+        if usage is None or usage != "refresh-token":
+            raise credentials_exception
+
+    except ExpiredSignatureError:
+        raise HTTPException(
+            status_code = status.HTTP_406_NOT_ACCEPTABLE,
+            detail = "Token for refresh token has expired!"
+        )
+
+    except JWTError:
+        raise credentials_exception
+    
+    user_info = get_user_info_by_uid(db = db, uid = uid)
+
+    if user_info is None:
+        raise credentials_exception
+    
+    access_token_expires_hours = os.getenv('ACCESS_TOKEN_EXPIRES_HOURS')
+    access_token_expires = timedelta(hours=int(access_token_expires_hours))
+    access_token = Token.get_access_token(
+        data={
+            "uid": user_info.uid.__str__()
+        },
+        expires_delta=access_token_expires
+    )
+
+    refresh_token_expires_hours = os.getenv('REFRESH_TOKEN_EXPIRES_HOURS')
+    refresh_token_expires = timedelta(hours=int(refresh_token_expires_hours))
+    refresh_token = Token.get_refresh_token(
+        data={
+            "uid": user_info.uid.__str__(),
+            "usage": "refresh-token"
+        },
+        expires_delta=refresh_token_expires
+    )
+
+    response.set_cookie(
+        "refresh-token", 
+        refresh_token, 
+        httponly = True, 
+        secure = False,
+        max_age = int(refresh_token_expires_hours) * 60 * 60 * 1000
+    )
+
+    return dict(
+        access_token = access_token,
+        token_type = "bearer"
+    )
+
+
+@router.post("/logout", response_model = LogoutResponse)
+async def logout(response: Response, token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    credentials_exception = HTTPException(
+        status_code =status.HTTP_401_UNAUTHORIZED,
+        detail = "Could not validate credentials!",
+        headers = {"WWW-Authenticate": "Bearer"}
+    )
+    try:
+        payload = Token.decode_access_token(token)
+        uid: str = payload.get('uid')
+        exp: int = payload.get('exp')
+        if uid is None:
+            raise credentials_exception
+        if exp is None:
+            raise credentials_exception
+        
+        token_payload = AccessToken(uid = uid, exp = exp)
+
+    except ExpiredSignatureError:
+        raise HTTPException(
+            status_code = status.HTTP_401_UNAUTHORIZED,
+            detail = "Token Expired!",
+            headers = {"WWW-Authenticate": "Bearer"}
+        )
+
+    except JWTError:
+        raise credentials_exception
+
+    user_info = get_user_info_by_uid(db = db, uid = token_payload.uid)
+
+    if user_info is None:
+        raise credentials_exception
+    
+    token_revoked_ttl: int = (token_payload.exp - datetime.now().timestamp()).__int__()
+    if token_revoked_ttl > 0:
+        TokenRevoked.objects.ttl(token_revoked_ttl).create(
+            token = token, 
+            uid = token_payload.uid
+        )
+
+    response.delete_cookie("refresh-token")
+    return dict(
+        detail="Your account has been successfully logged out!"
+    )
 
 @router.get("/auth-testing")
 async def auth_testing(current_user: UserInfo = Depends(get_current_active_user)): # For authentication testing

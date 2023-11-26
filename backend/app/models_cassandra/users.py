@@ -11,7 +11,7 @@ class TokenRevoked(Model):
 
     token = columns.Text(primary_key=True)
     uid = columns.UUID()
-    created_at = columns.DateTime()
+    created_at = columns.DateTime(default=datetime.now())
 
 class EmailInProcess(Model):
     __keyspace__ = 'article_express'
