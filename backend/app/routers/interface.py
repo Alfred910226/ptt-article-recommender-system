@@ -11,3 +11,7 @@ templates = Jinja2Templates(directory = "app/templates")
 @router.get("/")
 async def index(request: Request):
     return templates.TemplateResponse("/home/index.html", {"request": request})
+
+@router.get("/forgot-password")
+async def get_forgot_password_interface(request: Request):
+    return templates.TemplateResponse("forgot_password/forgot_password_page.html", {"request": request})
