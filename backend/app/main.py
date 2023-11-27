@@ -1,9 +1,11 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
+from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles
 from cassandra.cqlengine.management import sync_table
 from cassandra.cqlengine import connection
 
-from app.routers import users
+from app.routers import users, interface
 from app.models_cassandra.users import TokenRevoked, EmailInProcess
 
 @asynccontextmanager
@@ -14,10 +16,9 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(lifespan = lifespan)
+
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 app.include_router(users.router)
-
-@app.get("/")
-async def main():
-    return {"message": "Welcome to Article Express!"}
+app.include_router(interface.router)
