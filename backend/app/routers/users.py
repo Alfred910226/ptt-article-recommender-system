@@ -342,16 +342,6 @@ async def resend_verification_email(user_email: Email, background_tasks: Backgro
         return dict(
             detail = "Verification email has been sent to your registered email address!"
         )
-    
-@router.get("/forgot-password/page")
-async def get_forgot_password_page(request: Request):
-    templates = Jinja2Templates(
-        directory = "app/templates/forgot_password"
-    )
-    return templates.TemplateResponse(
-        "forgot_password_page.html", 
-        {"request": request}
-    )
 
 @router.post("/forgot-password", status_code = status.HTTP_200_OK, response_model=SendPasswordResetEmailResponse)
 async def send_password_reset_email(email: Email, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
