@@ -1,6 +1,5 @@
 from sqlalchemy.orm import Session
 
-from app.database import SessionLocal
 from app.models_postgres.users import Users
 from app.schemas.users import CreateUser, Email
 
