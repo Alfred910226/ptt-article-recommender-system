@@ -8,20 +8,24 @@
     <script src="{{ url_for('static', path='js/bootstrap.bundle.min.js') }}"></script>
 </head>
 <body>
-
     <div class="container d-flex align-items-center" style="min-height: 100vh;">
-        <div class="card mx-auto" style="width: 20rem;">
+        <div class="card mx-auto" style="width: 25rem;">
           <div class="card-header">
-            Recover password
+            Please verify your email
           </div>
           <div class="card-body">
             <form>
                 <div class="mb-5">
-                    <label for="exampleInputEmail1" class="form-label">Your email address</label>
-                    <input type="email" class="form-control" id="exampleInputEmail1" aria-describedby="emailHelp">
+                    <p class="text-center">We have sent a verification link to </p>
+                    <p class="text-center">contact@articlecpress.com</p>
+                    <p class="text-center">Click on the link to complete the verification process.</p>
+                    
                 </div>
-               
-                <button type="submit" class="btn btn-dark btn-block">Email me a recovery link</button>
+                
+                <button type="submit" class="btn btn-dark btn-block">Resend verification email</button>
+                <div class="mb-2"></div>
+                    <p class="text-center">If you still can't find the email. No problem.</p>
+                </div>
             </form>
           </div>
         </div>

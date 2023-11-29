@@ -20,10 +20,14 @@ async def get_forgot_password_interface(request: Request):
 async def get_forgot_password_interface(request: Request):
     return templates.TemplateResponse("forgotpassword/changepassword.html", {"request": request})
 
-@router.get("/login")
+@router.get("/signin")
 async def get_login_interface(request: Request):
     return templates.TemplateResponse("login/login.html", {"request": request})
 
 @router.get("/signup")
 async def get_signup_interface(request: Request):
     return templates.TemplateResponse("signup/signup.html", {"request": request})
+
+@router.get("/verification-email")
+async def get_verification_interface(request: Request):
+    return templates.TemplateResponse("verificationemail/verificationemail.html", {"request": request})
