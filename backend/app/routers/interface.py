@@ -14,12 +14,15 @@ async def index(request: Request):
 
 @router.get("/forgot-password")
 async def get_forgot_password_interface(request: Request):
-    return templates.TemplateResponse("forgot_password/forgot_password_page.html", {"request": request})
+    return templates.TemplateResponse("forgotpassword/recoverpassword.html", {"request": request})
+
+@router.get("/change-password")
+async def get_forgot_password_interface(request: Request):
+    return templates.TemplateResponse("forgotpassword/changepassword.html", {"request": request})
 
 @router.get("/login")
 async def get_login_interface(request: Request):
     return templates.TemplateResponse("login/login.html", {"request": request})
-
 
 @router.get("/signup")
 async def get_signup_interface(request: Request):
