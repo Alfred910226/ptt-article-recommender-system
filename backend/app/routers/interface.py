@@ -19,3 +19,8 @@ async def get_forgot_password_interface(request: Request):
 @router.get("/login")
 async def get_login_interface(request: Request):
     return templates.TemplateResponse("login/login.html", {"request": request})
+
+
+@router.get("/signup")
+async def get_signup_interface(request: Request):
+    return templates.TemplateResponse("signup/signup.html", {"request": request})
