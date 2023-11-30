@@ -10,22 +10,27 @@
 <body>
     <div class="container d-flex align-items-center" style="min-height: 100vh;">
         <div class="card mx-auto" style="width: 25rem;">
-          <div class="card-header">
+          <div class="card-header text-center">
             Please verify your email
           </div>
           <div class="card-body">
             <form>
-                <div class="mb-5">
-                    <p class="text-center">Just follow the link we sent to</p>
+                <div class="mb-3">
+                    <p class="text-center">Please enter the code sent to</p>
                     <p class="text-center"><strong>contact@articlexpress.com</strong></p>
                 </div>
+                <div class="mb-5">
+                    <input type="text" class="form-control" id="exampleInputEmail1" aria-describedby="emailHelp" maxlength="5" style="text-align:center;">
+                </div>
+                <div class="mb-3">
+                    <button type="submit" class="btn btn-dark" style="width: 100%">Confirm</button>
+                </div>
                 
-                <button type="submit" class="btn btn-dark btn-block">I did not receive the email</button>
-            
+                <button type="submit" class="btn btn-dark" style="width: 100%">Resend the code</button>
+
             </form>
           </div>
         </div>
       </div>
-    
 </body>
 </html>
