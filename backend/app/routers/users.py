@@ -8,7 +8,8 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from jose import JWTError, ExpiredSignatureError
 
-from app.utils.encryptor import Hasher, Token
+from app.utils.jwt import Token
+from app.utils.hashing import Hasher
 from app.schemas.users import (
     CreateUser, 
     CreateUserResponse, 

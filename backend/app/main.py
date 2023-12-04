@@ -3,8 +3,11 @@ from fastapi import FastAPI
 from cassandra.cqlengine.management import sync_table
 from cassandra.cqlengine import connection
 
-from app.routers import users
+from app.routers import users, auth
 from app.models_cassandra.users import TokenRevoked, EmailInProcess
+from app.utils.app_exceptions import AppExceptionCase
+from app.utils.app_exceptions import app_exception_handler
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -16,8 +19,10 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-app.include_router(users.router)
+@app.exception_handler(AppExceptionCase)
+async def custom_app_exception_handler(request, e):
+    return await app_exception_handler(request, e)
 
-@app.get("/")
-async def main():
-    return {"message": "Welcome to Article Express!"}
+app.include_router(users.router)
+app.include_router(auth.router)
+
