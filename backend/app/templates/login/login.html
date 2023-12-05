@@ -6,6 +6,7 @@
 	<title>Article Express</title>
     <link rel="stylesheet" href="{{ url_for('static', path='css/bootstrap.min.css') }}">
     <script src="{{ url_for('static', path='js/bootstrap.bundle.min.js') }}"></script>
+    <script src="{{ url_for('static', path='js/jquery-3.7.1.min.js') }}"></script>
 </head>
 
 <body>
@@ -22,26 +23,48 @@
             Sign In
           </div>
           <div class="card-body">
-            <form>
-                <div class="mb-3">
-                    <label for="exampleInputEmail1" class="form-label">Email address</label>
-                    <input type="email" class="form-control" id="exampleInputEmail1" aria-describedby="emailHelp">
-                </div>
-                <div class="mb-3">
-                    <label for="exampleInputPassword1" class="form-label">Password</label>
-                    <input type="password" class="form-control" id="exampleInputPassword1">
-                </div>
-                <div class="mb-4">
-                    <a href="#" class="link-secondary text-secondary">Forgot your password</a>
-                </div>
+            
+            <div class="mb-3">
+                <label for="inputEmail" class="form-label">Email address</label>
+                <input type="email" class="form-control" id="inputEmail">
+            </div>
+            <div class="mb-3">
+                <label for="inputPassword" class="form-label">Password</label>
+                <input type="password" class="form-control" id="inputPassword">
+            </div>
+            <div class="mb-4">
+                <a href="#" class="link-secondary text-secondary">Forgot your password</a>
+            </div>
 
-                <button type="submit" class="btn btn-dark" style="width: 100%">Sign in</button>
-                
-                <hr/>
+            <button type="submit" class="btn btn-dark" style="width: 100%" id="signinBtn">Sign in</button>
+            
+            <hr/>
 
-                <button type="submit" class="btn btn-dark" style="width: 100%">Create account</button>
-                
-            </form>
+            <button type="submit" class="btn btn-dark" style="width: 100%" id="createAccountBtn">Create account</button>
+        
+            <script>
+              $(document).ready(function(){
+                $('#signBtn').click(function(){
+
+                  var email = $('#inputEmail').val()
+                  var password = $('#inputPassword').val()
+
+                  $.post({
+                    url: "http://localhost/auth/signup",
+                    data: {
+                      email: email,
+                      password: password,
+                      success: function(response){
+                        console.log(response)
+                      },
+                      error: function(error){
+                        console.error(error)
+                      }
+                    }
+                  })
+                })
+              })
+            </script>
           </div>
         </div>
       </div>
