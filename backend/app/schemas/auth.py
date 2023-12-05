@@ -40,5 +40,10 @@ class Tokens(BaseModel):
     access_token: Optional[str]
     refresh_token: Optional[str]
 
+class EmailVerification(BaseModel):
+    email_verification_token: str
+    verification_code: str
+
+    
 
 

@@ -1,16 +1,19 @@
+import random
+import string
 import os
 from datetime import timedelta, datetime
 
+from fastapi import BackgroundTasks
 from jose import JWTError, ExpiredSignatureError
 
 from app.services.main import AppService, AppCRUD
-from app.schemas.auth import UserInfo, UserInfoCreate, FormData, TokenInfo, Tokens, UserInfoValidated
+from app.schemas.auth import UserInfo, UserInfoCreate, FormData, TokenInfo, Tokens, UserInfoValidated, EmailVerification
 from app.models_postgres.users import Users
 from app.utils.service_result import ServiceResult
 from app.utils.app_exceptions import AppException
 from app.utils.jwt import Token
 from app.utils.hashing import Hasher
-from app.models_cassandra.users import TokenRevoked
+from app.models_cassandra.users import TokenRevoked, EmailVerificationCode
 
 class AuthService(AppService):
     def create_account(self, user: UserInfoCreate) -> ServiceResult:
@@ -31,7 +34,24 @@ class AuthService(AppService):
         
         if not user_info:
             return ServiceResult(AppException.AuthCreateUserInfo())
-        return ServiceResult(user_info)
+        
+        email_verification_token = Token.create_email_verification_token(
+            data=dict(
+                uid=str(user_info.uid),
+                token_usage="email-verification-token"
+            ),
+            expires_delta=timedelta(hours=int(os.getenv('EMAIL_VERIFICATION_TOKEN_EXPIRES_HOURS')))
+        )
+
+        code = ''.join(random.choice(string.ascii_letters + string.digits) for x in range(5))
+
+        EmailVerificationCode.objects.create(uid=str(user_info.uid), code=code)
+
+        response=dict(
+            email_verification_token=email_verification_token
+        )
+        
+        return ServiceResult(response)
     
     def login_account(self, user: FormData) -> ServiceResult:
         if not AuthCRUD(self.db).check_if_email_exists(user):
@@ -197,7 +217,48 @@ class AuthService(AppService):
         )
 
         return ServiceResult(response)
+    
+    def email_verification(self, verification_info: EmailVerification):
+        if TokenRevoked.objects.filter(token=verification_info.verification_code).allow_filtering().first():
+            return ServiceResult(AppException.ExpiredToken({"message": "Your account has already been activated."}))
         
+        try:
+            email_verification_token_payload = Token.decode_email_verification_token(verification_info.email_verification_token)
+        except ExpiredSignatureError:
+            return ServiceResult(AppException.ExpiredToken({"message": "Email verification token has expired!"}))
+        except JWTError:
+            return ServiceResult(AppException.InvalidToken({"message": "Invalid email verification token!"}))
+
+        email_verification_token_info = TokenInfo(**email_verification_token_payload)
+
+        email_verification_info = EmailVerificationCode.objects.filter(uid=str(email_verification_token_info.uid)).allow_filtering().first()
+        email_verification_code = email_verification_info.code
+
+        if email_verification_code != verification_info.verification_code:
+            return ServiceResult(AppException.InvalidInputData({"message": "The entered verification code does not match!"}))
+
+        AuthCRUD(self.db).update_account_status(uid=email_verification_token_info.uid)
+        
+        token_ttl: int = (email_verification_token_info.exp - datetime.now().timestamp()).__int__()
+        if token_ttl > 0:
+            TokenRevoked.objects.ttl(token_ttl).create(token=verification_info.verification_code, uid=email_verification_token_info.uid, created_at=datetime.now())
+
+        response=dict(
+            message="Account has been activated."
+        )
+
+        return ServiceResult(response)
+    
+    def resend_email_verification(self, user: UserInfoValidated):
+        code = ''.join(random.choice(string.ascii_letters + string.digits) for x in range(5))
+
+        EmailVerificationCode.objects.create(uid=str(user.uid), code=code)
+
+        response=dict(
+            message="The verification code has been sent to your email."
+        )
+
+        return ServiceResult(response)
     
 
 class AuthCRUD(AppCRUD):
@@ -233,6 +294,13 @@ class AuthCRUD(AppCRUD):
         user_info = self.db.query(Users).filter(Users.uid == uid).first()
         user_info.access_token = token.access_token
         user_info.refresh_token = token.refresh_token
+        self.db.commit()
+        self.db.refresh(user_info)
+        return user_info
+    
+    def update_account_status(self, uid: str) -> UserInfo:
+        user_info = self.db.query(Users).filter(Users.uid == uid).first()
+        user_info.is_verified = True
         self.db.commit()
         self.db.refresh(user_info)
         return user_info

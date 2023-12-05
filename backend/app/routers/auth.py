@@ -1,6 +1,4 @@
-import os
-from datetime import timedelta
-from typing import Annotated
+
 
 from fastapi import APIRouter, Depends
 from fastapi.security import OAuth2PasswordBearer
@@ -8,7 +6,7 @@ from fastapi.security import OAuth2PasswordBearer
 from app.models_postgres import users
 from app.database import engine
 from app.database import SessionLocal
-from app.schemas.auth import UserInfoCreate, FormData, Tokens, UserInfoValidated
+from app.schemas.auth import UserInfoCreate, FormData, Tokens, UserInfoValidated, EmailVerification
 from app.services.auth import AuthService
 from app.utils.service_result import handle_result
 
@@ -53,10 +51,18 @@ async def get_refresh_token(token: Tokens, db: get_db = Depends()):
     result = AuthService(db).get_refresh_token(token)
     return handle_result(result)
 
+@router.post("/email-verification")
+async def email_verification(verification_info: EmailVerification, db: get_db = Depends()):
+    result = AuthService(db).email_verification(verification_info)
+    return handle_result(result)
 
-
-
+@router.post("/resend-email-verification")
+async def resend_email_verifiaction(db: get_db = Depends(), user_info: validate_current_user = Depends()):
+    user_info = UserInfoValidated(**user_info)
+    result = AuthService(db).resend_email_verification(user_info)
+    return handle_result(result)
 
 @router.get("/testing")
-async def testing(data: validate_current_user = Depends()):
+async def testing( data: validate_current_user = Depends()):
+    
     return data

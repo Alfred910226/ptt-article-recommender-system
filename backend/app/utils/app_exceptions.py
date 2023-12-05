@@ -70,3 +70,11 @@ class AppException:
             """
             status_code = 403
             AppExceptionCase.__init__(self, status_code, context)
+
+    class InvalidInputData(AppExceptionCase):
+        def __init__(self, context: dict = None):
+            """
+            Incorrect data entered
+            """
+            status_code = 400
+            AppExceptionCase.__init__(self, status_code, context)
