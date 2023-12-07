@@ -1,9 +1,11 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
+from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles
 from cassandra.cqlengine.management import sync_table
 from cassandra.cqlengine import connection
 
-from app.routers import users, auth
+from app.routers import users, auth, interface
 from app.models_cassandra.users import TokenRevoked, EmailInProcess, EmailVerificationCode
 from app.utils.app_exceptions import AppExceptionCase
 from app.utils.app_exceptions import app_exception_handler
@@ -18,7 +20,9 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(lifespan = lifespan)
+
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 @app.exception_handler(AppExceptionCase)
 async def custom_app_exception_handler(request, e):
@@ -26,4 +30,4 @@ async def custom_app_exception_handler(request, e):
 
 app.include_router(users.router)
 app.include_router(auth.router)
-
+app.include_router(interface.router)
