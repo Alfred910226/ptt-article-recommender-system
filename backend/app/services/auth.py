@@ -7,7 +7,7 @@ from fastapi import BackgroundTasks
 from jose import JWTError, ExpiredSignatureError
 
 from app.services.main import AppService, AppCRUD
-from app.schemas.auth import UserInfo, UserInfoCreate, FormData, TokenInfo, Tokens, UserInfoValidated, EmailVerification
+from app.schemas.auth import UserInfo, UserInfoCreate, FormData, TokenInfo, Tokens, UserInfoValidated, EmailVerification, ForgotPassword, ChangePassword
 from app.models_postgres.users import Users
 from app.utils.service_result import ServiceResult
 from app.utils.app_exceptions import AppException
@@ -17,11 +17,13 @@ from app.models_cassandra.users import TokenRevoked, EmailVerificationCode
 
 class AuthService(AppService):
     def create_account(self, user: UserInfoCreate) -> ServiceResult:
-        if AuthCRUD(self.db).check_if_username_exists(user):
-            return ServiceResult(AppException.UserInfoConflict({"message": "Username is already taken!"}))
-        
-        if AuthCRUD(self.db).check_if_email_exists(user):
+        user_info = AuthCRUD(self.db).get_account_info_by_email(user.username)
+        if user_info:
             return ServiceResult(AppException.UserInfoConflict({"message": "Email is already taken!"}))
+        
+        user_info = AuthCRUD(self.db).get_account_info_by_uid(user.username)
+        if user_info:
+            return ServiceResult(AppException.UserInfoConflict({"message": "Username is already taken!"}))            
         
         user_updated = dict(
             username=user.username,
@@ -54,7 +56,9 @@ class AuthService(AppService):
         return ServiceResult(response)
     
     def login_account(self, user: FormData) -> ServiceResult:
-        if not AuthCRUD(self.db).check_if_email_exists(user):
+        user_info = AuthCRUD(self.db).get_account_info_by_email(user.email)
+
+        if not user_info:
             return ServiceResult(AppException.AuthenticationFailed({"message": "No matching accounts have been found!"}))
         
         user_info = AuthCRUD(self.db).get_account_info_by_email(email=user.email)
@@ -260,6 +264,60 @@ class AuthService(AppService):
 
         return ServiceResult(response)
     
+    def forgot_password(self, form_data: ForgotPassword):        
+        user_info = AuthCRUD(self.db).get_account_info_by_email(form_data.email)
+
+        if not user_info:
+            return ServiceResult(AppException.AuthenticationFailed({"message": "No matching accounts have been found!"}))
+        
+        change_password_token = Token.create_change_password_token(
+            data=dict(
+                uid=str(user_info.uid),
+                token_usage="change-password-token"
+            ),
+            expires_delta=timedelta(hours=int(os.getenv('CHANGE_PASSWORD_TOKEN_EXPIRES_HOURS')))
+        )
+
+        response = dict(
+            change_password_token=change_password_token
+        )
+
+        return ServiceResult(response)
+    
+    def change_password(self, form_data: ChangePassword):
+        if TokenRevoked.objects.filter(token=form_data.change_password_token).allow_filtering().first():
+            return ServiceResult(AppException.ExpiredToken({"message": "Access token has expired!"}))
+        
+        try:
+            change_password_token_payload = Token.decode_change_password_token(form_data.change_password_token)
+        except ExpiredSignatureError:
+            return ServiceResult(AppException.ExpiredToken({"message": "Refresh token has expired!"}))
+        except JWTError:
+                return ServiceResult(AppException.InvalidToken({"message": "Invalid refresh token!"}))
+        
+        try:
+            change_password_token_info = TokenInfo(**change_password_token_payload)
+        except:
+            return ServiceResult(AppException.InvalidToken({"message": "Invalid refresh token!"}))
+        
+
+        password = Hasher.get_password_hash(form_data.password.get_secret_value())
+
+        user_info = AuthCRUD(self.db).update_account_password(change_password_token_info.uid, password)
+
+        if user_info:
+            token_revoked_ttl: int = (change_password_token_info.exp - datetime.now().timestamp()).__int__()
+            if token_revoked_ttl > 0:
+                TokenRevoked.objects.ttl(token_revoked_ttl).create(token=form_data.change_password_token, uid=change_password_token_info.uid, created_at=datetime.now())
+            
+            response=dict(
+                message="Password has been successfully updated."
+            )
+
+            return ServiceResult(response)
+        
+        return ServiceResult(AppException.DataUpdatedFailed({"message": "Failed to update account information!"}))
+    
 
 class AuthCRUD(AppCRUD):
     def create_account(self, user: UserInfoCreate) -> UserInfo:
@@ -268,18 +326,6 @@ class AuthCRUD(AppCRUD):
         self.db.commit()
         self.db.refresh(user_info)
         return user_info
-    
-    def check_if_username_exists(self, user: UserInfoCreate) -> bool:
-        result = self.db.query(Users).filter(Users.username == user.username).first()
-        if result:
-            return True
-        return False
-    
-    def check_if_email_exists(self, user: UserInfoCreate) -> bool:
-        result = self.db.query(Users).filter(Users.email == user.email).first()
-        if result:
-            return True
-        return False
     
     def get_account_info_by_email(self, email: str) -> UserInfo:
         return self.db.query(Users).filter(Users.email == email).first()
@@ -304,5 +350,11 @@ class AuthCRUD(AppCRUD):
         self.db.commit()
         self.db.refresh(user_info)
         return user_info
-
+    
+    def update_account_password(self, uid: str, password: str):
+        user_info = self.db.query(Users).filter(Users.uid == uid).first()
+        user_info.password = password
+        self.db.commit()
+        self.db.refresh(user_info)
+        return user_info
     

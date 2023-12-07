@@ -8,7 +8,7 @@ from app.models_cassandra.users import EmailInProcess
 
 class Mail:
     @staticmethod
-    def verification_email(recipient, body):
+    def email_verification(recipient, body):
         EmailInProcess.create(
             task_source = "email-verification",
             email = recipient

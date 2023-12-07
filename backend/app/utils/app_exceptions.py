@@ -78,3 +78,12 @@ class AppException:
             """
             status_code = 400
             AppExceptionCase.__init__(self, status_code, context)
+
+    class DataUpdatedFailed(AppExceptionCase):
+        def __init__(self, context: dict = None):
+            """
+            Data failed to update
+            """
+            status_code = 422
+            AppExceptionCase.__init__(self, status_code, context)
+

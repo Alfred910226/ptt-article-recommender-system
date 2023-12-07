@@ -65,3 +65,22 @@ class Token():
     def decode_email_verification_token(token):
         return jwt.decode(token, os.getenv('EMAIL_VERIFICATION_TOKEN_SECRET_KEY'), algorithms=os.getenv('EMAIL_VERIFICATION_TOKEN_ALGORITHM'))
         
+    """
+    Create forgot password Token
+    """
+    
+    @staticmethod
+    def create_change_password_token(data: dict, expires_delta: Union[timedelta, None] = None):
+        to_encode = data.copy()
+        if expires_delta:
+            expire = datetime.now() + expires_delta
+        else:
+            expire = datetime.now() + timedelta(hours=1)
+        to_encode.update({'exp': expire})
+
+        encodeed_jwt = jwt.encode(to_encode, os.getenv('CHANGE_PASSWORD_TOKEN_SECRET_KEY'), algorithm=os.getenv('CHANGE_PASSWORD_TOKEN_ALGORITHM'))
+        return encodeed_jwt
+    
+    @staticmethod
+    def decode_change_password_token(token):
+        return jwt.decode(token, os.getenv('CHANGE_PASSWORD_TOKEN_SECRET_KEY'), algorithms=os.getenv('CHANGE_PASSWORD_TOKEN_ALGORITHM'))

@@ -44,6 +44,12 @@ class EmailVerification(BaseModel):
     email_verification_token: str
     verification_code: str
 
+class ForgotPassword(BaseModel):
+    email: EmailStr
+
+class ChangePassword(BaseModel):
+    change_password_token: Optional[str]
+    password: SecretStr
     
 
 

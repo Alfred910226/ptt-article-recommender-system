@@ -6,7 +6,7 @@ from fastapi.security import OAuth2PasswordBearer
 from app.models_postgres import users
 from app.database import engine
 from app.database import SessionLocal
-from app.schemas.auth import UserInfoCreate, FormData, Tokens, UserInfoValidated, EmailVerification
+from app.schemas.auth import UserInfoCreate, FormData, Tokens, UserInfoValidated, EmailVerification, ForgotPassword, ChangePassword
 from app.services.auth import AuthService
 from app.utils.service_result import handle_result
 
@@ -62,7 +62,16 @@ async def resend_email_verifiaction(db: get_db = Depends(), user_info: validate_
     result = AuthService(db).resend_email_verification(user_info)
     return handle_result(result)
 
+@router.post("/forgot-password")
+async def forgot_password(form_data: ForgotPassword, db: get_db = Depends()):
+    result = AuthService(db).forgot_password(form_data)
+    return handle_result(result)
+
+@router.put("/forgot-password")
+async def change_password(form_data: ChangePassword, db: get_db = Depends()):
+    result = AuthService(db).change_password(form_data)
+    return handle_result(result)
+
 @router.get("/testing")
 async def testing( data: validate_current_user = Depends()):
-    
     return data
