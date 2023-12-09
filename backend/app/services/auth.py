@@ -21,7 +21,7 @@ class AuthService(AppService):
         if user_info:
             return ServiceResult(AppException.UserInfoConflict({"message": "Email is already taken!"}))
         
-        user_info = AuthCRUD(self.db).get_account_info_by_uid(user.username)
+        user_info = AuthCRUD(self.db).get_account_info_by_username(user.username)
         if user_info:
             return ServiceResult(AppException.UserInfoConflict({"message": "Username is already taken!"}))            
         
@@ -345,6 +345,9 @@ class AuthCRUD(AppCRUD):
     
     def get_account_info_by_uid(self, uid: str) -> UserInfo:
         return self.db.query(Users).filter(Users.uid == uid).first()
+    
+    def get_account_info_by_username(self, username: str) -> UserInfo:
+        return self.db.query(Users).filter(Users.username == username).first()
     
     def check_token_exists(self, token: TokenInfo) -> str:
         return self.db.query(Users).filter(Users.uid == token.uid).first().refresh_token
