@@ -45,41 +45,78 @@
             <button type="button" class="btn btn-dark" style="width: 100%" id="createAccountBtn">Create account</button>
         
             <script>
+
+              var isEmailValid;
+
               $(document).ready(function(){
                 $('#signinBtn').click(function(){
-                  var feedbackInfo = document.getElementById("emailFeedbackInfo");
-                  feedbackInfo.innerHTML = "";
-                  var feedbackInfo = document.getElementById("passwordFeedbackInfo");
-                  feedbackInfo.innerHTML = "";
                   var email = $('#inputEmail').val();
                   var password = $('#inputPassword').val();
-                  $.ajax({
-                    url: "http://localhost/auth/login",
-                    type: "post",
-                    dataType: "json",
-                    contentType: "application/json",
-                    data: JSON.stringify({
-                      email: email,
-                      password: password
-                    }),
-                    success: function(response){
-                      window.location.href = 'http://localhost/testing?token=' + response.access_token;
-                    },
-                    error: function(response){
-                      
-                      if (response.responseJSON.context.message === "Account not found!") {
-                        var feedbackInfo = document.getElementById("emailFeedbackInfo");
-                        feedbackInfo.innerHTML = response.responseJSON.context.message;
+                  if (isEmailValid){
+                    $.ajax({
+                      url: "http://localhost/auth/login",
+                      type: "post",
+                      dataType: "json",
+                      contentType: "application/json",
+                      data: JSON.stringify({
+                        email: email,
+                        password: password
+                      }),
+                      success: function(response){
+                        window.location.href = 'http://localhost/testing?token=' + response.access_token;
+                      },
+                      error: function(response){
                         
-                      } else if (response.responseJSON.context.message === "Invalid password!"){
-                        var feedbackInfo = document.getElementById("passwordFeedbackInfo");
-                        feedbackInfo.innerHTML = response.responseJSON.context.message;
+                        if (response.responseJSON.context.message === "No matching account found!") {
+                          var feedbackInfo = document.getElementById("emailFeedbackInfo");
+                          feedbackInfo.innerHTML = response.responseJSON.context.message;
+                          
+                        } else if (response.responseJSON.context.message === "Invalid password!"){
+                          var feedbackInfo = document.getElementById("passwordFeedbackInfo");
+                          feedbackInfo.innerHTML = response.responseJSON.context.message;
+                        }
+                        
                       }
-                      
-                    }
-                  });
+                    });
+                  }
+                  
                 })
               })
+
+
+              $(document).ready(function() {
+                var timeout;
+                $('#inputEmail').on('input', function() {
+                  isEmailValid = false
+                  var feedbackInfo = document.getElementById("emailFeedbackInfo");
+                  feedbackInfo.innerHTML = "";
+
+                  clearTimeout(timeout);
+                  timeout = setTimeout(function() {
+
+                    function validateEmail(email) {
+                      const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                      return regex.test(email);
+                    }
+
+                    var inputValue = $('#inputEmail').val();
+                    if (validateEmail(inputValue) ) {
+                      isEmailValid = true
+
+                    } else if (inputValue.length >= 1){
+                        var feedbackInfo = document.getElementById("emailFeedbackInfo");
+                        feedbackInfo.innerHTML = "This email is not in a valid format!";
+                    }
+                  }, 1000);
+                })
+              });
+
+              $(document).ready(function() {
+                $('#inputPassword').on('input', function() {
+                  var feedbackInfo = document.getElementById("passwordFeedbackInfo");
+                  feedbackInfo.innerHTML = "";
+                })
+              });
 
               $('#createAccountBtn').click(function(){
                 window.location.href = 'http://localhost/signup'
