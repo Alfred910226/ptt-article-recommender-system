@@ -50,6 +50,9 @@ class ForgotPassword(BaseModel):
 class ChangePassword(BaseModel):
     change_password_token: Optional[str]
     password: SecretStr
+
+class CheckUsernameExists(BaseModel):
+    username: str
     
 
 

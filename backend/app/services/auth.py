@@ -7,7 +7,7 @@ from fastapi import BackgroundTasks
 from jose import JWTError, ExpiredSignatureError
 
 from app.services.main import AppService, AppCRUD
-from app.schemas.auth import UserInfo, UserInfoCreate, FormData, TokenInfo, Tokens, UserInfoValidated, EmailVerification, ForgotPassword, ChangePassword
+from app.schemas.auth import UserInfo, UserInfoCreate, FormData, TokenInfo, Tokens, UserInfoValidated, EmailVerification, ForgotPassword, ChangePassword, CheckUsernameExists
 from app.models_postgres.users import Users
 from app.utils.service_result import ServiceResult
 from app.utils.app_exceptions import AppException
@@ -119,7 +119,7 @@ class AuthService(AppService):
             except:
                 return ServiceResult(AppException.InvalidToken({"message": "Invalid refresh token!"}))
 
-            if AuthCRUD(self.db).check_if_the_token_exists(refresh_token_info) != token.refresh_token:
+            if AuthCRUD(self.db).check_token_exists(refresh_token_info) != token.refresh_token:
                 return ServiceResult(AppException.ExpiredToken({"message": "Your account has been logged out. Please login again!"}))
             
             access_token = Token.create_access_token(
@@ -318,6 +318,19 @@ class AuthService(AppService):
         
         return ServiceResult(AppException.DataUpdatedFailed({"message": "Failed to update account information!"}))
     
+    def check_username_exists(self, form_data: CheckUsernameExists):
+        user_info = AuthCRUD(self.db).check_username_exists(form_data.username)
+        if user_info:
+            response=dict(
+                message="This username has already been taken!"
+            )
+            return ServiceResult(response)
+        
+        response=dict(
+            message="This username is available!"
+        )
+        return ServiceResult(response)
+    
 
 class AuthCRUD(AppCRUD):
     def create_account(self, user: UserInfoCreate) -> UserInfo:
@@ -333,8 +346,11 @@ class AuthCRUD(AppCRUD):
     def get_account_info_by_uid(self, uid: str) -> UserInfo:
         return self.db.query(Users).filter(Users.uid == uid).first()
     
-    def check_if_the_token_exists(self, token: TokenInfo) -> str:
+    def check_token_exists(self, token: TokenInfo) -> str:
         return self.db.query(Users).filter(Users.uid == token.uid).first().refresh_token
+    
+    def check_username_exists(self, username: str) -> bool:
+        return self.db.query(Users).filter(Users.username == username).first()
     
     def update_token(self, uid: str, token: Tokens) -> UserInfo:
         user_info = self.db.query(Users).filter(Users.uid == uid).first()
