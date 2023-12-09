@@ -6,7 +6,7 @@ from fastapi.security import OAuth2PasswordBearer
 from app.models_postgres import users
 from app.database import engine
 from app.database import SessionLocal
-from app.schemas.auth import UserInfoCreate, FormData, Tokens, UserInfoValidated, EmailVerification, ForgotPassword, ChangePassword
+from app.schemas.auth import UserInfoCreate, FormData, Tokens, UserInfoValidated, EmailVerification, ForgotPassword, ChangePassword, CheckUsernameExists
 from app.services.auth import AuthService
 from app.utils.service_result import handle_result
 
@@ -70,6 +70,11 @@ async def forgot_password(form_data: ForgotPassword, db: get_db = Depends()):
 @router.put("/forgot-password")
 async def change_password(form_data: ChangePassword, db: get_db = Depends()):
     result = AuthService(db).change_password(form_data)
+    return handle_result(result)
+
+@router.get("/check-username")
+async def check_username_exists(form_data: CheckUsernameExists, db: get_db = Depends()):
+    result = AuthService(db).check_username_exists(form_data)
     return handle_result(result)
 
 @router.get("/testing")
