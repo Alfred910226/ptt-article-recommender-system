@@ -20,7 +20,7 @@ async def get_forgot_password_interface(request: Request):
 async def get_forgot_password_interface(request: Request):
     return templates.TemplateResponse("forgotpassword/changepassword.html", {"request": request})
 
-@router.get("/signin")
+@router.get("/login")
 async def get_login_interface(request: Request):
     return templates.TemplateResponse("login/login.html", {"request": request})
 
