@@ -6,6 +6,7 @@
 	<title>Article Express</title>
     <link rel="stylesheet" href="{{ url_for('static', path='css/bootstrap.min.css') }}">
     <script src="{{ url_for('static', path='js/bootstrap.bundle.min.js') }}"></script>
+    <script src="{{ url_for('static', path='js/jquery-3.7.1.min.js') }}"></script>
 </head>
 <body>
     <div class="container d-flex align-items-center" style="min-height: 100vh;">
@@ -16,25 +17,193 @@
           <div class="card-body">
             <form>
                 <div class="mb-3">
-                    <label for="exampleInputEmail1" class="form-label">Email</label>
-                    <input type="email" class="form-control" id="exampleInputEmail1" aria-describedby="emailHelp">
+                    <label for="inputEmail" class="form-label">Email</label>
+                    <input type="email" class="form-control" id="inputEmail">
+                    <div id="emailFeedbackInfoDeny" class="form-text" style="color:red;"></div>
                 </div>
                 <div class="mb-3">
-                    <label for="exampleInputEmail1" class="form-label">Username</label>
-                    <input type="text" class="form-control" id="exampleInputEmail1" aria-describedby="emailHelp">
+                    <label for="inputUsername" class="form-label">Username</label>
+                    <input type="text" class="form-control" id="inputUsername">
+                    <div id="usernameFeedbackInfoDeny" class="form-text" style="color:red;"></div>
+                    <div id="usernameFeedbackInfoAcceptable" class="form-text" style="color:green;"></div>
                 </div>
                 <div class="mb-3">
-                    <label for="exampleInputPassword1" class="form-label">Choose password</label>
-                    <input type="password" class="form-control" id="exampleInputPassword1">
+                    <label for="inputPassword" class="form-label">Choose password</label>
+                    <input type="password" class="form-control" id="inputPassword">
+                    <div id="passwordFeedbackInfoDeny" class="form-text" style="color:red;"></div>
                 </div>
                 <div class="mb-5">
-                    <label for="exampleInputPassword1" class="form-label">Confirm password</label>
-                    <input type="password" class="form-control" id="exampleInputPassword1">
+                    <label for="inputConfirmPassword" class="form-label">Confirm password</label>
+                    <input type="password" class="form-control" id="inputConfirmPassword">
+                    <div id="confirmPasswordFeedbackInfoDeny" class="form-text" style="color:red;"></div>
                 </div>
                 
-                <button type="submit" class="btn btn-dark" style="width: 100%">Sign Up</button>
+                <button  type="button", class="btn btn-dark" style="width: 100%" id="signUpBtn">Sign Up</button>
+                <div id="apiFeedbackInfo" class="form-text" style="color:red;"></div>
                 
             </form>
+            <script>
+
+              var isEmailValid = false
+              var isUserNameValid = false
+              var isPasswordValid = false
+
+              var email;
+              var username;
+              var password;
+              
+              $(document).ready(function() {
+              
+                  var timeout;
+                  
+                  $('#inputUsername').on('input', function() {
+                    isEmailValid = false
+                    var feedbackInfo = document.getElementById("usernameFeedbackInfoDeny");
+                    feedbackInfo.innerHTML = "";
+                    var feedbackInfo = document.getElementById("usernameFeedbackInfoAcceptable");
+                    feedbackInfo.innerHTML = "";
+
+                    clearTimeout(timeout);
+                    timeout = setTimeout(function() {
+                        
+                      var inputValue = $('#inputUsername').val();
+                      if(inputValue.length >= 1 && inputValue.length < 5){
+                        var feedbackInfo = document.getElementById("usernameFeedbackInfoDeny");
+                        feedbackInfo.innerHTML = "Please enter a username longer than 5 characters!";
+                      } else if (inputValue.length >= 1) {
+                        $.ajax({
+                          url: "http://localhost/auth/check-username",
+                          type: "post",
+                          dataType: "json",
+                          contentType: "application/json",
+                          data: JSON.stringify({
+                            username: inputValue
+                          }),
+                          success: function(response){
+                            
+                            if (response.message === 'This username has already been taken!'){
+                              var feedbackInfo = document.getElementById("usernameFeedbackInfoDeny");
+                              feedbackInfo.innerHTML = response.message;
+
+                            } else if (response.message === 'This username is available!'){
+                              var feedbackInfo = document.getElementById("usernameFeedbackInfoAcceptable");
+                              feedbackInfo.innerHTML = response.message;
+                              isEmailValid = true
+                              username = inputValue
+                            }
+                          },
+                          error: function(response){
+                            console.log(response);
+                          }
+                        });
+                      }
+                    }, 2000);
+                    
+                  });
+              });
+
+              $(document).ready(function() {
+                  var timeout;
+                  $('#inputEmail').on('input', function() {
+                    isUserNameValid = false
+                    var feedbackInfo = document.getElementById("emailFeedbackInfoDeny");
+                    feedbackInfo.innerHTML = "";
+
+                    clearTimeout(timeout);
+                    timeout = setTimeout(function() {
+
+                      function validateEmail(email) {
+                        const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                        return regex.test(email);
+                      }
+
+                      var inputValue = $('#inputEmail').val();
+                      if (validateEmail(inputValue) ) {
+                        isUserNameValid = true
+                        email = inputValue
+
+                      } else if (inputValue.length >= 1){
+                          var feedbackInfo = document.getElementById("emailFeedbackInfoDeny");
+                          feedbackInfo.innerHTML = "This email is not in a valid format!";
+                      }
+                    }, 2000);
+                  });
+              });
+
+              $(document).ready(function() {
+                var timeout;
+                $('#inputPassword').on('input', function() {
+                  var feedbackInfo = document.getElementById("passwordFeedbackInfoDeny");
+                  feedbackInfo.innerHTML = "";
+
+                  clearTimeout(timeout);
+
+                  var inputValue = $('#inputPassword').val();
+                  
+                  timeout = setTimeout(function() {
+                    if (inputValue.length < 5){
+                      var feedbackInfo = document.getElementById("passwordFeedbackInfoDeny");
+                      feedbackInfo.innerHTML = "Please enter a password longer than 5 characters!!";
+                    }
+                  }, 2000);
+                })
+              });
+
+              $(document).ready(function() {
+                var timeout;
+                $('#inputConfirmPassword').on('input', function() {
+                  isPasswordValid = false
+                  var feedbackInfo = document.getElementById("confirmPasswordFeedbackInfoDeny");
+                  feedbackInfo.innerHTML = "";
+
+                  clearTimeout(timeout);
+                  var inputPassword = $('#inputPassword').val();
+                  var inputConfirmPassword = $('#inputConfirmPassword').val();
+
+                  timeout = setTimeout(function() {
+                    if (inputPassword !== inputConfirmPassword && inputConfirmPassword.length >= 1) {
+                      var feedbackInfo = document.getElementById("confirmPasswordFeedbackInfoDeny");
+                      feedbackInfo.innerHTML = "The two passwords you entered do not match!";
+                
+                    } else {
+                      isPasswordValid = true
+                      password = inputConfirmPassword
+                    }
+                    
+                  }, 500);
+                  
+                })
+              });
+
+              $(document).ready(function(){
+                $('#signUpBtn').click(function(){
+                  
+                  if (isEmailValid && isUserNameValid && isPasswordValid){
+            
+                    $.ajax({
+                      url: "http://localhost/auth/signup",
+                      type: "post",
+                      dataType: "json",
+                      contentType: "application/json",
+                      data: JSON.stringify({
+                        email: email,
+                        username: username,
+                        password: password
+                      }),
+                      success: function(response){
+                        window.location.href = 'http://localhost/verification-email?token=' + response.email_verification_token;
+                      },
+                      error: function(response){
+                        
+                      }
+                    });
+                  }else{
+                    
+                  }
+                })
+              })
+              
+              </script>
           </div>
         </div>
       </div>
