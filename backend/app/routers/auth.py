@@ -72,7 +72,7 @@ async def change_password(form_data: ChangePassword, db: get_db = Depends()):
     result = AuthService(db).change_password(form_data)
     return handle_result(result)
 
-@router.get("/check-username")
+@router.post("/check-username")
 async def check_username_exists(form_data: CheckUsernameExists, db: get_db = Depends()):
     result = AuthService(db).check_username_exists(form_data)
     return handle_result(result)
