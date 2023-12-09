@@ -59,7 +59,7 @@ class AuthService(AppService):
         user_info = AuthCRUD(self.db).get_account_info_by_email(user.email)
 
         if not user_info:
-            return ServiceResult(AppException.AuthenticationFailed({"message": "No matching accounts have been found!"}))
+            return ServiceResult(AppException.AuthenticationFailed({"message": "No matching account found!"}))
         
         user_info = AuthCRUD(self.db).get_account_info_by_email(email=user.email)
 
@@ -183,7 +183,7 @@ class AuthService(AppService):
         user_info = AuthCRUD(self.db).get_account_info_by_uid(uid=access_token_info.uid)
         
         if not user_info:
-            return ServiceResult(AppException.AuthenticationFailed({"message": "No matching accounts have been found!"}))
+            return ServiceResult(AppException.AuthenticationFailed({"message": "No matching account found!"}))
         
         if not user_info.is_verified:
             return ServiceResult(AppException.InactiveAccount({"message": "Your account is not yet activated!"}))
@@ -268,7 +268,7 @@ class AuthService(AppService):
         user_info = AuthCRUD(self.db).get_account_info_by_email(form_data.email)
 
         if not user_info:
-            return ServiceResult(AppException.AuthenticationFailed({"message": "No matching accounts have been found!"}))
+            return ServiceResult(AppException.AuthenticationFailed({"message": "No matching account found!"}))
         
         change_password_token = Token.create_change_password_token(
             data=dict(
