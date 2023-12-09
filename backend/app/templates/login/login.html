@@ -27,13 +27,15 @@
             <div class="mb-3">
                 <label for="inputEmail" class="form-label">Email address</label>
                 <input type="email" class="form-control" id="inputEmail">
+                <div id="emailFeedbackInfo" class="form-text" style="color:red;"></div>
             </div>
             <div class="mb-3">
                 <label for="inputPassword" class="form-label">Password</label>
                 <input type="password" class="form-control" id="inputPassword">
+                <div id="passwordFeedbackInfo" class="form-text" style="color:red;"></div>
             </div>
             <div class="mb-4">
-                <a href="#" class="link-secondary text-secondary">Forgot your password</a>
+                <a href="http://localhost/forgot-password" class="link-secondary text-secondary">Forgot your password</a>
             </div>
 
             <button type="submit" class="btn btn-dark" style="width: 100%" id="signinBtn">Sign in</button>
@@ -44,26 +46,44 @@
         
             <script>
               $(document).ready(function(){
-                $('#signBtn').click(function(){
-
-                  var email = $('#inputEmail').val()
-                  var password = $('#inputPassword').val()
-
-                  $.post({
-                    url: "http://localhost/auth/signup",
-                    data: {
+                $('#signinBtn').click(function(){
+                  var feedbackInfo = document.getElementById("emailFeedbackInfo");
+                  feedbackInfo.innerHTML = "";
+                  var feedbackInfo = document.getElementById("passwordFeedbackInfo");
+                  feedbackInfo.innerHTML = "";
+                  var email = $('#inputEmail').val();
+                  var password = $('#inputPassword').val();
+                  $.ajax({
+                    url: "http://localhost/auth/login",
+                    type: "post",
+                    dataType: "json",
+                    contentType: "application/json",
+                    data: JSON.stringify({
                       email: email,
-                      password: password,
-                      success: function(response){
-                        console.log(response)
-                      },
-                      error: function(error){
-                        console.error(error)
+                      password: password
+                    }),
+                    success: function(response){
+                      window.location.href = 'http://localhost/testing?token=' + response.access_token;
+                    },
+                    error: function(response){
+                      
+                      if (response.responseJSON.context.message === "Account not found!") {
+                        var feedbackInfo = document.getElementById("emailFeedbackInfo");
+                        feedbackInfo.innerHTML = response.responseJSON.context.message;
+                        
+                      } else if (response.responseJSON.context.message === "Invalid password!"){
+                        var feedbackInfo = document.getElementById("passwordFeedbackInfo");
+                        feedbackInfo.innerHTML = response.responseJSON.context.message;
                       }
+                      
                     }
-                  })
+                  });
                 })
               })
+
+              $('#createAccountBtn').click(function(){
+                window.location.href = 'http://localhost/signup'
+              });
             </script>
           </div>
         </div>
