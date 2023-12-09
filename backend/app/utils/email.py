@@ -21,7 +21,7 @@ class Mail:
 
             file_loader = FileSystemLoader('app/templates/email')
             env = Environment(loader=file_loader)
-            template = env.get_template('verification_email.html')
+            template = env.get_template('verification-email.html')
             html = template.render(subject=body.get('subject'), token=body.get('token'))
             mimehtml = MIMEText(html, 'html')
             message.attach(mimehtml)
@@ -53,7 +53,7 @@ class Mail:
 
             file_loader = FileSystemLoader('app/templates/email')
             env = Environment(loader=file_loader)
-            template = env.get_template('password_reset_email.html')
+            template = env.get_template('password-reset-email.html')
             html = template.render(subject=body.get('subject'), token=body.get('token'))
             mimehtml = MIMEText(html, 'html')
             message.attach(mimehtml)
