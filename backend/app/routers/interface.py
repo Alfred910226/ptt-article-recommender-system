@@ -39,7 +39,7 @@ async def get_login_interface(request: Request):
 async def get_signup_interface(request: Request):
     return templates.TemplateResponse("signup/signup.html", {"request": request})
 
-@router.get("/verification-email")
+@router.get("/email-verification")
 async def get_verification_interface(token: str, request: Request, db: get_db = Depends()):
     result = InterfaceService(db).get_verification_interface(token)
     response = handle_result(result)
