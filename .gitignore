@@ -3,3 +3,30 @@
 
 # virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
 hs_err_pid*
+
+.vscode
+.DS_Store
+.lh
+/storage
+/venv
+__pycache__
+.env.backend
+.pytest_cache
+.gitgnore
+.env.postgres
+
+# VScode
+.metals
+
+# IntelliJ IDEA
+.idea/
+
+# Scala SBT
+target/
+
+# Compiled class file
+*.class
+
+# Logs
+log/
+logs/
