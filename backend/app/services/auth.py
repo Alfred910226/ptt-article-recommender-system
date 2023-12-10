@@ -194,7 +194,18 @@ class AuthService(AppService):
             return ServiceResult(AppException.AuthenticationFailed({"message": "No matching account found!"}))
         
         if not user_info.is_verified:
-            return ServiceResult(AppException.InactiveAccount({"message": "Your account is not yet activated!"}))
+            email_verification_token = Token.create_email_verification_token(
+                data=dict(
+                    uid=str(user_info.uid),
+                    token_usage="email-verification-token"
+                ),
+                expires_delta=timedelta(hours=int(os.getenv('EMAIL_VERIFICATION_TOKEN_EXPIRES_HOURS')))
+            )
+
+            response=dict(
+                email_verification_token=email_verification_token
+            )
+            return ServiceResult(response)
         
         response=dict(
             uid=user_info.uid,
