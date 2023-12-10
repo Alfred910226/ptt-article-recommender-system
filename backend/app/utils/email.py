@@ -8,21 +8,21 @@ from app.models_cassandra.users import EmailInProcess
 
 class Mail:
     @staticmethod
-    def email_verification(recipient, body):
+    def email_verification(recipient, subject, code):
         EmailInProcess.create(
             task_source = "email-verification",
             email = recipient
         )
         try:
             message = MIMEMultipart("alternative")
-            message["Subject"] = body.get('subject')
+            message["Subject"] = subject
             message["From"] = os.getenv('MAIL_FROM')
             message["To"] = recipient
 
             file_loader = FileSystemLoader('app/templates/email')
             env = Environment(loader=file_loader)
             template = env.get_template('verification-email.html')
-            html = template.render(subject=body.get('subject'), token=body.get('token'))
+            html = template.render(subject=subject, code=code)
             mimehtml = MIMEText(html, 'html')
             message.attach(mimehtml)
             with smtplib.SMTP(os.getenv('MAIL_SERVER'), 2525) as server:

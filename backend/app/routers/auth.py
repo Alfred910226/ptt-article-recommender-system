@@ -1,6 +1,6 @@
 
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, BackgroundTasks
 from fastapi.security import OAuth2PasswordBearer
 
 from app.models_postgres import users
@@ -31,8 +31,8 @@ async def validate_current_user(access_token: oauth2_scheme = Depends(), db: get
     return handle_result(result)
 
 @router.post("/signup")
-async def create_account(user: UserInfoCreate, db: get_db = Depends()):
-    result = AuthService(db).create_account(user)
+async def create_account(user: UserInfoCreate, background_tasks: BackgroundTasks, db: get_db = Depends()):
+    result = AuthService(db).create_account(user, background_tasks)
     return handle_result(result)
 
 @router.post("/login")

@@ -14,9 +14,10 @@ from app.utils.app_exceptions import AppException
 from app.utils.jwt import Token
 from app.utils.hashing import Hasher
 from app.models_cassandra.users import TokenRevoked, EmailVerificationCode
+from app.utils.email import Mail
 
 class AuthService(AppService):
-    def create_account(self, user: UserInfoCreate) -> ServiceResult:
+    def create_account(self, user: UserInfoCreate, background_tasks: BackgroundTasks) -> ServiceResult:
         user_info = AuthCRUD(self.db).get_account_info_by_email(user.username)
         if user_info:
             return ServiceResult(AppException.UserInfoConflict({"message": "Email is already taken!"}))
@@ -48,6 +49,13 @@ class AuthService(AppService):
         code = ''.join(random.choice(string.ascii_letters + string.digits) for x in range(5))
 
         EmailVerificationCode.objects.create(uid=str(user_info.uid), code=code)
+
+        background_tasks.add_task(
+            Mail.email_verification, 
+            recipient=user_info.email, 
+            subject="Verify Your Email for ArticleExpress!",
+            code=code
+        )
 
         response=dict(
             email_verification_token=email_verification_token
