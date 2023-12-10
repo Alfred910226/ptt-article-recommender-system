@@ -1,10 +1,21 @@
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Depends
 from fastapi.templating import Jinja2Templates
+
+from app.database import SessionLocal
+from app.services.interface import InterfaceService
+from app.utils.service_result import handle_result
 
 router = APIRouter(
     tags = ['User interface']
 )
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 templates = Jinja2Templates(directory = "app/templates")
 
@@ -29,5 +40,10 @@ async def get_signup_interface(request: Request):
     return templates.TemplateResponse("signup/signup.html", {"request": request})
 
 @router.get("/verification-email")
-async def get_verification_interface(request: Request):
-    return templates.TemplateResponse("verification-email/verification-email.html", {"request": request})
+async def get_verification_interface(token: str, request: Request, db: get_db = Depends()):
+    result = InterfaceService(db).get_verification_interface(token)
+    response = handle_result(result)
+    if 'email' in response:
+        return templates.TemplateResponse("verification-email/verification-email.html", {"request": request, "email": response.get('email'), "token": token})
+    
+    return response
