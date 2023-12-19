@@ -10,10 +10,12 @@ hs_err_pid*
 /storage
 /venv
 __pycache__
-.env.backend
 .pytest_cache
 .gitgnore
+.env.backend
 .env.postgres
+.env.rabbitmq
+.env.crawler
 
 # VScode
 .metals

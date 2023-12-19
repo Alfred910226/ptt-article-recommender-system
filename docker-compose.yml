@@ -17,6 +17,32 @@ services:
     env_file:
       - ./backend/.env.backend
 
+  rabbitmq:
+    container_name: rabbitmq
+    image: rabbitmq:3.11-management
+    ports:
+        - 5672:5672
+        - 15672:15672
+    volumes:
+        - ./storage/rabbitmq/data/:/var/lib/rabbitmq/
+        - ./storage/rabbitmq/log/:/var/log/rabbitmq
+    networks:
+      - article-express-network
+    env_file:
+      - ./rabbitmq/.env.rabbitmq
+
+  crawler:
+    container_name: crawler
+    build:
+      context: ./web_crawler
+      dockerfile: Dockerfile
+    volumes:
+      - ./web_crawler/celery_worker:/celery_worker
+    networks:
+      - article-express-network
+    env_file:
+      - ./web_crawler/.env.crawler
+
   postgres:
     container_name: postgres
     image: postgres:14
@@ -42,6 +68,8 @@ services:
 
   jupyter-notebook:
     image: jupyter/datascience-notebook
+    volumes:
+      - ./jupyter-notebook/work:/work
     ports:
       - "8888:8888"
     networks:
