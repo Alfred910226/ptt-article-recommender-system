@@ -12,251 +12,226 @@ from celery_worker.schemas.crawler import ArticleData, CommentData
 cookie = {'over18':'1'}
 BASE_URL = "https://www.ptt.cc/"
 
-@celery.task
-def crawl_next_page(URL: str):
-    s = requests.session()
-    s.keep_alive = False
-    page = s.get(URL, verify=False, cookies=cookie)
-    soup = fromstring(page.text)
-    path = soup.xpath("//div[@class='btn-group btn-group-paging']/a[@class='btn wide'][text()='‹ 上頁']/@href")
-    if path:
-        URL = urljoin(BASE_URL, path.pop())
-        print(URL)
-        crawl_directory.apply_async((URL, ), queue='web-crawler')
-        crawl_next_page.apply_async((URL, ), queue='web-crawler')
-    return None
 
 @celery.task
-def crawl_directory(URL: str):
+def crawl_next_page(url: str):
     s = requests.session()
     s.keep_alive = False
-    page = s.get(URL, verify=False, cookies=cookie)
-    if page.status_code != 200:
-        print(
-            f"""
-            ==================== [ DEBUG ] ===================
-            Error from crawl_directory:
-            status_code: {page.status_code}
-            directory link: {URL}
-            ==================================================
-            """
-        )
-    soup = BeautifulSoup(page.content, 'html.parser')
-    
-    for div_tag in soup.find_all("div", class_="title"):
-        if not div_tag.find("a", href=True):
-            continue
-
-        article_url = div_tag.find("a", href=True).get("href")
-        URL = urljoin(BASE_URL, article_url)
-        # crawl_article.apply_async((URL, ), queue='web-crawler')
-        crawl_comment.apply_async((URL, ), queue='web-crawler')
-
-    return None
-
-@celery.task
-def crawl_article(URL: str):
-    s = requests.session()
-    s.keep_alive = False
-    page = s.get(URL, verify=False, cookies=cookie)
-    if page.status_code != 200:
-        print(
-            f"""
-            ==================== [ DEBUG ] ===================
-            error from crawl_directory:
-            status_code: {page.status_code}
-            article link: {URL}
-            ==================================================
-            """
-        )
-    
-    pattern = r"/Gossiping/(.*?)\.html"
-    match = re.search(pattern, URL)
-
-    if match:
-        article_id = match.group(1)
-    else:
-        print(
-            f"""
-            ==================== [ DEBUG ] ===================
-            error from crawl_comment:
-            Article id not found
-            article link: {URL}
-            ==================================================
-            """
-        )
-    
-    soup = BeautifulSoup(page.content, 'html.parser')
-    contents = soup.find("div", class_="bbs-screen bbs-content", id="main-content")
-
-    temp_author = contents.find_all("span", class_="article-meta-value")[0].get_text()
-    author = temp_author.split(' ')[0]
-
     try:
-        board = contents.find_all("span", class_="article-meta-value")[1].get_text()
-    except:
-        print(
-            f"""
-            ==================== [ DEBUG ] ===================
-            error from crawl_article:
-            list index out of range
-            article link: {URL}
-            ==================================================
-            """
-        )
-    title = contents.find_all("span", class_="article-meta-value")[2].get_text()
+        page = s.get(url, verify=False, cookies=cookie)
+    except Exception as e:
+        print(e)
 
-    match = re.match(r"^Re: (.*)", title)
-    if match:
-        is_reply = True
+    soup = BeautifulSoup(page.content, 'html.parser')
+    
+    next_path = soup.find('a', class_='btn wide', string='‹ 上頁').get('href')
+    if next_path:
+        next_page_url = urljoin(BASE_URL, next_path)
+        crawl_next_page.apply_async((next_page_url, ), queue='urls')
     else:
-        is_reply = False
+        print("There is no next page!")
 
-    match = re.search(r"\[([^]]+)\]", title)
+    for div in soup.find_all("div", class_="r-ent"):
+        author = div.find("div", class_="author").get_text()
+        try:
+            path = div.find("div", class_="title").find('a', href=True).get('href')
+        except Exception as e:
+            print(e)
+            print(div.get_text())
 
-    if match:
-        temp_categories = match.group(1)
-        categories = [temp_categories]
-    else:
-        categories = []
+        article_url = urljoin(BASE_URL, path)
+        crawl_article.apply_async((article_url, author, ), queue='urls')
+    
+    return None
 
-    created_on = datetime.strptime(
-        contents.find_all("span", class_="article-meta-value")[3].get_text(), 
-        "%a %b %d %H:%M:%S %Y"
-    )
-    """
-    remove tags
-    """
-    for tag in contents(['div', 'span']):
-        tag.decompose()
+@celery.task
+def crawl_article(url: str, author: str):
+    s = requests.session()
+    s.keep_alive = False
+    try:
+        page = s.get(url, verify=False, cookies=cookie)
+    except Exception as e:
+        print(e)
 
-    for a_tag in contents.find_all("a", href=True):
-        img_url = a_tag.get("href")
-        img_tag = soup.new_tag("img", src=img_url)
-        a_tag.replace_with(img_tag)
+    article_id = parse_out_article_id(url)
 
-    content = contents.prettify().replace("\n", "<br>")
+    parse_out_article_content.apply_async((page.content, article_id, author, ), queue='soup')
+    parse_out_article_comment.apply_async((page.content, article_id,), queue='soup')
+    return None
 
-    response = dict(
+@celery.task
+def parse_out_article_content(content: str, article_id: str, author: str):
+    soup = BeautifulSoup(content, 'html.parser')
+
+    board, title, created_on = parse_out_metaline(soup=soup)
+
+    content = parse_out_content(soup=soup)
+
+    category = parse_out_category(title=title)
+
+    is_reply = parse_for_reply_status(title=title)
+
+    article_data = ArticleData(
         article_id=article_id,
         author=author,
         title=title,
         content=content,
         board=board,
         is_reply=is_reply,
-        categories=categories,
-        created_on=created_on
+        categories=[category],
+        created_on=created_on,
     )
+    """
+    to kafka:
+    article_data
+    """
 
-    article_data = ArticleData(**response)
-    print(article_data.model_dump_json())
     return None
 
 @celery.task
-def crawl_comment(URL: str):
-    s = requests.session()
-    s.keep_alive = False
-    page = s.get(URL, verify=False, cookies=cookie)
-    if page.status_code != 200:
-        print(
-            f"""
-            ==================== [ DEBUG ] ===================
-            error from crawl_comment:
-            status_code: {page.status_code}
-            ==================================================
-            """
-        )
-    pattern = r"/Gossiping/(.*?)\.html"
-    match = re.search(pattern, URL)
+def parse_out_article_comment(content: str, article_id: str):
 
-    if match:
-        article_id = match.group(1)
-    else:
-        print(
-            f"""
-            ==================== [ DEBUG ] ===================
-            error from crawl_comment:
-            Article id not found
-            ==================================================
-            """
-        )
+    soup = BeautifulSoup(content, 'html.parser')
 
-    soup = BeautifulSoup(page.content, 'html.parser')
-
-    created_on = datetime.strptime(
+    article_created_on = datetime.strptime(
         soup.find_all("span", class_="article-meta-value")[3].get_text(), 
         "%a %b %d %H:%M:%S %Y"
     )
 
-    for div_tag in soup.find_all("div", class_="push"):
+    recent_datetime = None
 
-        if div_tag.find("span", class_="f1 hl push-tag"):
-            user_reponse = div_tag.find("span", class_="f1 hl push-tag").get_text()
-            
-        elif div_tag.find("span", class_="hl push-tag"):
-            user_reponse = div_tag.find("span", class_="hl push-tag").get_text()
-        
-        user_reponse_mapping_table = {
-            "→ ": "newline",
-            "推 ": "like",
-            "噓 ": "unlike",
-        }
+    for div in soup.find_all("div", class_="push"):
+        user_feedback = parse_out_user_feedback(div)
+        user_id = parse_out_user_id(div)
+        comment = parse_out_comment(div)
+        ip_address = parse_out_ip_address(div)
+        comment_created_on, recent_datetime = parse_out_comment_datetime(div, article_created_on, recent_datetime)
+        try:
+            comment_data = CommentData(
+                article_id=article_id,
+                user_id=user_id,
+                user_feedback=user_feedback,
+                comment=comment,
+                ip_address=ip_address,
+                created_on=comment_created_on
+            )
+        except Exception as e:
+            print(e)
+            print(article_id)
 
-        user_feedback = user_reponse_mapping_table.get(user_reponse, "other")
-
-        user_id = div_tag.find("span", class_="f3 hl push-userid").get_text()
-        comment = div_tag.find("span", class_="f3 push-content").get_text().replace(":", "")
-        elements = div_tag.find("span", class_="push-ipdatetime").get_text()
-
-        # 提取IP地址
-        ip_pattern = r"\b(?:\d{1,3}\.){3}\d{1,3}\b"
-        ip_match = re.search(ip_pattern, elements)
-        
-        if ip_match:
-            ip_address = ip_match.group(0)
-        else:
-            ip_address = None
-        
-        # 提取日期
-        date_pattern = r"\b\d{2}/\d{2}\b"
-        date_match = re.search(date_pattern, elements)
-        
-        if date_match:
-            date = date_match.group(0)
-        else:
-            date = f"{created_on.year}/{created_on.month}/{created_on.day}"
-
-    
-        str(created_on.year) + "/" + date
-
-        # 提取時間
-        time_pattern = r"\b\d{2}:\d{2}\b"
-        time_match = re.search(time_pattern, elements)
-        
-        if time_match:
-            time = time_match.group(0)
-        else:
-            time = "00:00"
-
-        created_date = datetime.strptime(str(created_on.year) + "/" + date + " " + time, "%Y/%m/%d %H:%M")
-        
-        max_date = datetime(1971, 1, 1, 0, 0, 0)
-
-        if created_date > max_date:
-            max_date = created_date
-            created_on = max_date
-        else:
-            created_on = created_date.replace(year = created_date.year + 1)
-
-        response = dict(
-            article_id=article_id,
-            user_id=user_id,
-            user_feedback=user_feedback,
-            comment=comment,
-            ip_address=ip_address,
-            created_on=created_on
-        )
-
-        comment_data = CommentData(**response)
-        print(comment_data.model_dump_json())
+        """
+        to kafka:
+        comment_data
+        """
     return None
+
+def parse_out_article_id(url: str):
+    pattern = r"/([^/]+)\.html"
+    match = re.search(pattern, url)
+    if match:
+        return match.group(1)
+
+    return None
+
+def parse_out_metaline(soup: BeautifulSoup):
+    content = soup.find("div", class_="bbs-screen bbs-content", id="main-content")
+    try:
+        board = content.find_all("span", class_="article-meta-value")[1].get_text()
+        title = content.find_all("span", class_="article-meta-value")[2].get_text()
+        created_on = datetime.strptime(
+            content.find_all("span", class_="article-meta-value")[3].get_text(), 
+            "%a %b %d %H:%M:%S %Y"
+        )
+    except Exception as e:
+        print(e)
+    
+    return board, title, created_on
+
+def parse_out_content(soup: BeautifulSoup):
+    content = soup.find("div", class_="bbs-screen bbs-content", id="main-content")
+
+    for tag in content(['div', 'span']):
+        tag.decompose()
+
+    for a_tag in content.find_all("a", href=True):
+        img_url = a_tag.get("href")
+        img_tag = soup.new_tag("img", src=img_url)
+        a_tag.replace_with(img_tag)
+
+    return content.prettify().replace("\n", "<br>")
+
+def parse_for_reply_status(title: str):
+    return title.startswith("Re:")
+
+def parse_out_category(title: str):
+    match = re.search(r"\[([^]]+)\]", title)
+
+    if match:
+        return match.group(1)
+
+    return None
+
+def parse_out_user_feedback(div):
+    mapping_table = {
+        "→ ": "newline",
+        "推 ": "like",
+        "噓 ": "unlike",
+    }
+    if div.find("span", class_="f1 hl push-tag"):
+        user_feedback = div.find("span", class_="f1 hl push-tag").get_text()
+    else:
+        user_feedback = div.find("span", class_="hl push-tag").get_text()
+
+    return mapping_table.get(user_feedback, "other")
+
+def parse_out_user_id(div):
+    user_id = div.find("span", class_="f3 hl push-userid").get_text()
+    return user_id
+
+def parse_out_comment(div):
+    comment = div.find("span", class_="f3 push-content").get_text().replace(":", "")
+    return comment
+
+def parse_out_ip_address(div):
+    ipdatetime = div.find("span", class_="push-ipdatetime").get_text()
+    pattern = r"\b(?:\d{1,3}\.){3}\d{1,3}\b"
+    match = re.search(pattern, ipdatetime)
+    
+    if match:
+        return match.group(0)
+
+    return None
+
+def parse_out_comment_datetime(div, article_created_on: datetime, recent_datetime: datetime):
+    ipdatetime = div.find("span", class_="push-ipdatetime").get_text()
+
+    date_pattern = r"\b\d{2}/\d{2}\b"
+    date_match = re.search(date_pattern, ipdatetime)
+
+    if date_match:
+        date = f"{article_created_on.year}/{date_match.group(0)}"
+    else:
+        date = f"{article_created_on.year}/{article_created_on.month}/{article_created_on.day}"
+
+    time_pattern = r"\b\d{2}:\d{2}\b"
+    time_match = re.search(time_pattern, ipdatetime)
+
+    if time_match:
+        time = time_match.group(0)
+    else:
+        time = "00:00"
+
+    comment_created_on = datetime.strptime(
+        f"{date} {time}",
+        "%Y/%m/%d %H:%M"
+    )
+
+    if recent_datetime is None:
+        recent_datetime = comment_created_on
+    elif comment_created_on > recent_datetime:
+        recent_datetime = comment_created_on
+    else:
+        comment_created_on = comment_created_on.replace(year = comment_created_on.year + 1)
+        recent_datetime = comment_created_on
+
+    return comment_created_on, recent_datetime

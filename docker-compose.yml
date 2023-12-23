@@ -42,6 +42,8 @@ services:
       - article-express-network
     env_file:
       - ./web_crawler/.env.crawler
+    depends_on:
+      - rabbitmq
 
   postgres:
     container_name: postgres

@@ -1,5 +1,2 @@
-nohup celery -A celery_worker.celery:celery worker -l INFO -Q web-crawler -n web-crawler-1@%h --logfile=/celery_worker/celery_log/%h_worker_1.log --pool=threads --concurrency=50 --without-gossip --without-mingle &
-celery -A celery_worker.celery:celery worker -l INFO -Q web-crawler -n web-crawler-2@%h --logfile=/celery_worker/celery_log/%h_worker_2.log --pool=threads --concurrency=50 --without-gossip --without-mingle &
-celery -A celery_worker.celery:celery worker -l INFO -Q web-crawler -n web-crawler-3@%h --logfile=/celery_worker/celery_log/%h_worker_3.log --pool=threads --concurrency=50 --without-gossip --without-mingle &
-celery -A celery_worker.celery:celery worker -l INFO -Q web-crawler -n web-crawler-4@%h --logfile=/celery_worker/celery_log/%h_worker_4.log --pool=threads --concurrency=50 --without-gossip --without-mingle &
-celery -A celery_worker.celery:celery worker -l INFO -Q web-crawler -n web-crawler-5@%h --logfile=/celery_worker/celery_log/%h_worker_5.log --pool=threads --concurrency=50 --without-gossip --without-mingle
+nohup celery -A celery_worker.celery:celery worker -l INFO -Q urls -n urls@%h --logfile=/celery_worker/celery_log/urls@%h.log --pool=threads --concurrency=50 --without-gossip --without-mingle &
+celery -A celery_worker.celery:celery worker -l INFO -Q soup -n soup@%h --logfile=/celery_worker/celery_log/soup@%h.log --pool=threads --concurrency=100 --without-gossip --without-mingle
