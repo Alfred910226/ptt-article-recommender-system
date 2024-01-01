@@ -2,8 +2,8 @@ import re
 from datetime import datetime
 from urllib.parse import urljoin
 
+import json
 import requests
-from lxml.html import fromstring
 from bs4 import BeautifulSoup
 
 from celery_worker.celery import celery
@@ -12,13 +12,13 @@ from celery_worker.schemas.crawler import ArticleData, CommentData
 cookie = {'over18':'1'}
 BASE_URL = "https://www.ptt.cc/"
 
-
 @celery.task
 def crawl_next_page(url: str):
+
     s = requests.session()
     s.keep_alive = False
     try:
-        page = s.get(url, verify=False, cookies=cookie)
+        page = s.get(url, verify=True, cookies=cookie)
     except Exception as e:
         print(e)
 
@@ -49,7 +49,7 @@ def crawl_article(url: str, author: str):
     s = requests.session()
     s.keep_alive = False
     try:
-        page = s.get(url, verify=False, cookies=cookie)
+        page = s.get(url, verify=True, cookies=cookie)
     except Exception as e:
         print(e)
 
@@ -123,7 +123,9 @@ def parse_out_article_comment(content: str, article_id: str):
         to kafka:
         comment_data
         """
+
     return None
+
 
 def parse_out_article_id(url: str):
     pattern = r"/([^/]+)\.html"

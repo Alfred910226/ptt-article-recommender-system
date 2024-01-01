@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 
 from pydantic import BaseModel
 
@@ -18,5 +18,5 @@ class CommentData(BaseModel):
     user_id: str
     user_feedback: str
     comment: str
-    ip_address: str
+    ip_address: Optional[str] = None
     created_on: datetime
