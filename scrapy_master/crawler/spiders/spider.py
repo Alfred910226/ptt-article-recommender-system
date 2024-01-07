@@ -44,7 +44,7 @@ class PttSpider(RedisSpider):
             return None
         
         def parse_out_board_name(response):
-            board = response.xpath("//body/div[@id='main-container']/div[@id='main-content']/div[@class='article-metaline-right']/span[@class='article-meta-value']").get()
+            board = response.xpath("//body/div[@id='main-container']/div[@id='main-content']/div[@class='article-metaline-right']/span[@class='article-meta-value']/text()").get()
             return board
         
         def parse_out_title(response):
