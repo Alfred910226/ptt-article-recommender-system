@@ -1,6 +1,0 @@
-celery==5.3.6
-requests==2.31.0
-beautifulsoup4==4.12.2
-pydantic==2.5.3
-confluent-kafka==2.3.0
-redis==5.0.0
