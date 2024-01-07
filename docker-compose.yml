@@ -17,33 +17,65 @@ services:
     env_file:
       - ./backend/.env.backend
 
-  rabbitmq:
-    container_name: rabbitmq
-    image: rabbitmq:3.11-management
+  redis:
+    image: redis:7.2
+    container_name: redis
+    restart: always
     ports:
-        - 5672:5672
-        - 15672:15672
-    volumes:
-        - ./storage/rabbitmq/data/:/var/lib/rabbitmq/
-        - ./storage/rabbitmq/log/:/var/log/rabbitmq
+      - "6379:6379"
     networks:
       - article-express-network
-    env_file:
-      - ./rabbitmq/.env.rabbitmq
 
-  crawler:
-    container_name: crawler
+  scrapy-master:
+    container_name: scrapy-master
     build:
-      context: ./web_crawler
+      context: ./scrapy_master
       dockerfile: Dockerfile
     volumes:
-      - ./web_crawler/celery_worker:/celery_worker
+      - ./scrapy_master/crawler:/crawler
+
     networks:
       - article-express-network
     env_file:
-      - ./web_crawler/.env.crawler
-    depends_on:
-      - rabbitmq
+      - ./scrapy_master/.env.scrapy
+
+  scrapy-worker-1:
+    container_name: scrapy-worker-1
+    build:
+      context: ./scrapy_worker
+      dockerfile: Dockerfile
+    volumes:
+      - ./scrapy_master/crawler/spiders/__init__.py:/crawler/spiders/__init__.py
+      - ./scrapy_master/crawler/spiders/spider.py:/crawler/spiders/spider.py
+      - ./scrapy_master/crawler/items.py:/crawler/items.py
+      - ./scrapy_master/crawler/middlewares.py:/crawler/middlewares.py
+      - ./scrapy_master/crawler/pipelines.py:/crawler/pipelines.py
+      - ./scrapy_master/crawler/settings.py:/crawler/settings.py
+      - ./scrapy_master/scrapy.cfg:/scrapy.cfg
+      
+    networks:
+      - article-express-network
+    env_file:
+      - ./scrapy_master/.env.scrapy
+
+  scrapy-worker-2:
+    container_name: scrapy-worker-2
+    build:
+      context: ./scrapy_worker
+      dockerfile: Dockerfile
+    volumes:
+      - ./scrapy_master/crawler/spiders/__init__.py:/crawler/spiders/__init__.py
+      - ./scrapy_master/crawler/spiders/spider.py:/crawler/spiders/spider.py
+      - ./scrapy_master/crawler/items.py:/crawler/items.py
+      - ./scrapy_master/crawler/middlewares.py:/crawler/middlewares.py
+      - ./scrapy_master/crawler/pipelines.py:/crawler/pipelines.py
+      - ./scrapy_master/crawler/settings.py:/crawler/settings.py
+      - ./scrapy_master/scrapy.cfg:/scrapy.cfg
+      
+    networks:
+      - article-express-network
+    env_file:
+      - ./scrapy_master/.env.scrapy
 
   postgres:
     container_name: postgres
@@ -67,11 +99,62 @@ services:
       - article-express-network
     environment:
       - CQLENG_ALLOW_SCHEMA_MANAGEMENT=1
+  
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.3.2
+    hostname: zookeeper
+    container_name: zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_SERVER_ID: 1
+      ZOOKEEPER_SERVERS: zookeeper:2888:3888
+    networks:
+      - article-express-network
 
+  kafka:
+    image: confluentinc/cp-kafka:7.3.2
+    hostname: kafka
+    container_name: kafka
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+      - "9999:9999"
+    environment:
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:19092,EXTERNAL://kafka:9092,DOCKER://host.docker.internal:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,DOCKER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
+      KAFKA_BROKER_ID: 1
+      KAFKA_LOG4J_LOGGERS: "kafka.controller=INFO,kafka.producer.async.DefaultEventHandler=INFO,state.change.logger=INFO"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_JMX_PORT: 9999
+      KAFKA_JMX_HOSTNAME: ${DOCKER_HOST_IP:-127.0.0.1}
+      KAFKA_AUTHORIZER_CLASS_NAME: kafka.security.authorizer.AclAuthorizer
+      KAFKA_ALLOW_EVERYONE_IF_NO_ACL_FOUND: "true"
+    depends_on:
+      - zookeeper
+    networks:
+      - article-express-network
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: Kafka-UI
+    environment:
+      KAFKA_CLUSTERS_0_BOOTSTRAP_SERVERS: kafka:29092
+      KAFKA_CLUSTERS_0_NAME: kafka
+    ports:
+      - 8000:8080
+    networks:
+      - article-express-network
+      
   jupyter-notebook:
     image: jupyter/datascience-notebook
     volumes:
-      - ./jupyter-notebook/work:/work
+      - ./jupyter-notebook/work:/home/jovyan/work
     ports:
       - "8888:8888"
     networks:
