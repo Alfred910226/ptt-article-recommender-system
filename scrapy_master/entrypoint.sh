@@ -1,0 +1,1 @@
+nohup scrapy crawl add_task

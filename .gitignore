@@ -10,13 +10,26 @@ hs_err_pid*
 /storage
 /venv
 __pycache__
-.env.backend
 .pytest_cache
 .gitgnore
+.env.backend
 .env.postgres
-
-# scala
-target/
-project/
-.idea
+.env.rabbitmq
+.env.crawler
+.env.scrapy
+/jupyter-notebook/work
+# VScode
 .metals
+
+# IntelliJ IDEA
+.idea/
+
+# Scala SBT
+target/
+
+# Compiled class file
+*.class
+
+# Logs
+log/
+logs/
