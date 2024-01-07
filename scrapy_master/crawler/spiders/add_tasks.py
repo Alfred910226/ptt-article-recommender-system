@@ -6,7 +6,7 @@ import scrapy
 
 class AddTaskSpider(scrapy.Spider):
     name = 'add_task'
-    start_urls = ['https://www.ptt.cc/bbs/Gossiping/index31773.html']
+    start_urls = ['https://www.ptt.cc/bbs/Gossiping/index.html']
 
     custom_settings = {
         'ITEM_PIPELINES': {
