@@ -10,8 +10,8 @@ class ArticleData(BaseModel):
     content: str
     board: str
     is_reply: bool
-    categories: List
-    created_on: datetime
+    created_at: datetime
+    text_pre_processing: str
 
 class CommentData(BaseModel):
     article_id: str
@@ -19,4 +19,4 @@ class CommentData(BaseModel):
     user_feedback: str
     comment: str
     ip_address: Optional[str] = None
-    created_on: datetime
+    created_at: datetime

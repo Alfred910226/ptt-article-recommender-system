@@ -5,8 +5,12 @@ RABBITMQ_PASSWORD = os.getenv('RABBITMQ_PASSWORD')
 RABBITMQ_HOSTNAME = os.getenv('RABBITMQ_HOSTNAME')
 RABBITMQ_PORT = os.getenv('RABBITMQ_PORT')
 
+REDIS_HOSTNAME = os.getenv('REDIS_HOSTNAME')
+REDIS_PORT = os.getenv('REDIS_PORT')
+
 broker_url = 'amqp://{}:{}@{}:{}/'.format(RABBITMQ_USERNAME, RABBITMQ_PASSWORD, RABBITMQ_HOSTNAME, RABBITMQ_PORT)
-result_backend = 'rpc://'
+result_backend = 'redis://{}:{}/1'.format(REDIS_HOSTNAME, REDIS_PORT)
+
 task_serializer = 'json'
 result_serializer = 'json'
 database_table_schemas = {
